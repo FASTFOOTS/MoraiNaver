@@ -1,0 +1,10 @@
+<launch>
+  <include file="$(find velodyne_pointcloud)/launch/32e_points.launch"/>
+  <node pkg="wego" type="lidar_node.py" name="lidar_node" output="screen">
+    <!-- <param name="calibration" type="string" value="$(find wego)/config/VLP-16db.yaml"/>
+    <param name="model" type="string" value="VLP16"/>
+    <remap from="velodyne_points" to="lidar3D"/>
+    <param name="pcap" type="string" value="udp://127.0.0.1:2368"/>
+    <param name="python" type="string" value="python3"/> Specify the Python interpreter -->
+  </node>
+</launch>

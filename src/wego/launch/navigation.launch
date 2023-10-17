@@ -1,0 +1,17 @@
+<launch>
+  <!-- map file -->
+  <arg name="map_file" default="$(find wego)/maps/map.yaml"/>
+    
+  <!-- map server -->
+  <node name="map_server" pkg="map_server" type="map_server" args="$(arg map_file)" />
+  
+  <!-- amcl -->
+  <include file="$(find scout_mini_2dnav)/launch/amcl.launch" />
+  
+  <!-- move base -->
+  
+  <include file="$(find scout_mini_2dnav)/launch/move_base_only.launch" />
+  
+  <!-- run rviz -->
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find wego)/rviz/navigation.rviz" />
+</launch>
