@@ -1,0 +1,5 @@
+now
+src/slam_gmapping/gmapping/src/slam_gmapping => LaserScan
+
+src/slam_gmapping/gmapping/src/slam_gmapping_origin => LaserScan
+src/slam_gmapping/gmapping/src/slam_gmapping => PointCloud (still being modified)
