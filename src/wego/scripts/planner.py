@@ -67,7 +67,7 @@ class gen_planner():
 
         self.global_path = path_reader.read_txt(self.path_name)
 
-        normal_velocity = 11/3.6
+        normal_velocity = 120/3.6 # km/h -> m/s
         vel_planner=velocityPlanning(normal_velocity,0.15) ## 속도 계획
         vel_profile=vel_planner.curveBasedVelocity(self.global_path,100)
 
@@ -76,7 +76,7 @@ class gen_planner():
     
         #time var
         count=0
-        rate = rospy.Rate(30) # 30hz
+        rate = rospy.Rate(50) # 30hz
 
         while not rospy.is_shutdown():
             print(self.is_status , self.is_imu ,self.is_gps)
@@ -95,7 +95,7 @@ class gen_planner():
                 if selected_lane != -1: 
                     local_path=lattice_path[selected_lane]                
                 
-                if len(lattice_path)==7:                    
+                if len(lattice_path)==7:                  
                     for i in range(1,8):
                         globals()['lattice_path_{}_pub'.format(i)].publish(lattice_path[i-1])
                 ########################  lattice  ########################
@@ -109,11 +109,15 @@ class gen_planner():
                 # target_velocity = 100 # cc_vel
 
                 # ctrl_msg.linear.x= max(target_velocity,0)
-                if target_velocity > 0:
+                if target_velocity > self.velocity:
                     ctrl_msg.accel = 1
-                else:
+                    ctrl_msg.brake = 0
+                else: # target_velocity <= self.velocity:
                     ctrl_msg.accel = 0
-
+                    ctrl_msg.brake = 0
+                    if self.velocity > target_velocity + 5:
+                        ctrl_msg.accel = 0
+                        ctrl_msg.brake = 1
 
 
                 local_path_pub.publish(local_path) ## Local Path 출력

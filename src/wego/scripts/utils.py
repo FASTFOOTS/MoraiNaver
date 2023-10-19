@@ -146,46 +146,62 @@ class purePursuit :
         self.current_postion.z=msg.position.z
 
 
-
     def steering_angle(self):
-        vehicle_position=self.current_postion
-        rotated_point=Point()
-        self.is_look_forward_point= False
+        vehicle_position = self.current_postion
+        rotated_point = Point()
+        self.is_look_forward_point = False
 
-        
+        # PID control constants
+        kp = 0.2  # Proportional gain
+        ki = 0.005  # Integral gain
+        kd = 0.00  # Derivative gain
 
-        for i in self.path.poses :
-            path_point=i.pose.position
-            dx= path_point.x - vehicle_position.x
-            dy= path_point.y - vehicle_position.y
-            rotated_point.x=cos(self.vehicle_yaw)*dx + sin(self.vehicle_yaw)*dy
-            rotated_point.y=sin(self.vehicle_yaw)*dx - cos(self.vehicle_yaw)*dy
-            # print(f"rpx : {rotated_point.x}, rpy : {rotated_point.y}")
- 
-            
-            if rotated_point.x>0 :
-                dis=sqrt(pow(rotated_point.x,2)+pow(rotated_point.y,2))
-                if dis>= self.lfd :
-                    
-                    self.lfd=self.current_vel*3.6
-                    if self.lfd < self.min_lfd : 
-                        self.lfd=self.min_lfd
-                    elif self.lfd > self.max_lfd :
-                        self.lfd=self.max_lfd
-                    self.forward_point=path_point
-                    self.is_look_forward_point=True
-                    
+        # Initialize error terms
+        previous_error = 0
+        integral = 0
+
+        for i in self.path.poses:
+            path_point = i.pose.position
+            dx = path_point.x - vehicle_position.x
+            dy = path_point.y - vehicle_position.y
+            rotated_point.x = cos(self.vehicle_yaw) * dx + sin(self.vehicle_yaw) * dy
+            rotated_point.y = sin(self.vehicle_yaw) * dx - cos(self.vehicle_yaw) * dy
+
+            if rotated_point.x > 0:
+                dis = sqrt(pow(rotated_point.x, 2) + pow(rotated_point.y, 2))
+                if dis >= self.lfd:
+                    self.lfd = self.current_vel * 3.6
+                    if self.lfd < self.min_lfd:
+                        self.lfd = self.min_lfd
+                    elif self.lfd > self.max_lfd:
+                        self.lfd = self.max_lfd
+                    self.forward_point = path_point
+                    self.is_look_forward_point = True
                     break
-        
-        theta=atan2(rotated_point.y,rotated_point.x)
 
-        if self.is_look_forward_point :
-            self.steering=atan2((2*self.vehicle_length*sin(theta)),self.lfd)*180/pi #deg
-            print( self.steering)
-            return self.steering 
-        else : 
+        theta = atan2(rotated_point.y, rotated_point.x)
+
+        if self.is_look_forward_point:
+            desired_steering = atan2((2 * self.vehicle_length * sin(theta)), self.lfd) * 180 / pi  # deg
+
+            # Calculate error terms
+            error = desired_steering - self.steering
+            integral += error
+            derivative = error - previous_error
+
+            # PID control equation
+            self.steering = kp * error + ki * integral + kd * derivative
+
+            # Update previous error
+            previous_error = error
+
+            print(self.steering)
+            return self.steering / 2
+        else:
             print("no found forward point")
             return 0
+
+
         
 
 class mgko_obj :
