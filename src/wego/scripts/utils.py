@@ -195,10 +195,10 @@ class purePursuit :
             # Update previous error
             previous_error = error
 
-            print(self.steering)
+            # print(self.steering)
             return self.steering / 2
         else:
-            print("no found forward point")
+            # print("no found forward point")
             return 0
 
 
@@ -347,7 +347,7 @@ def latticePlanner(ref_path,vehicle_status,current_lane):
             out_path.append(lattice_path)
         
         add_point_size=int(vehicle_status[3]*2*3.6)
-        print('add point',add_point_size)
+        # print('add point',add_point_size)
         if add_point_size>len(ref_path.poses)-2:
             add_point_size=len(ref_path.poses)
         elif add_point_size<10 :
@@ -382,11 +382,11 @@ def latticePlanner(ref_path,vehicle_status,current_lane):
 
     
         selected_lane=lane_weight.index(min(lane_weight))
-        print(lane_weight,selected_lane)
+        # print(lane_weight,selected_lane)
         all_lane_collision=True
         
     else :
-        print("NO Reference Path")
+        # print("NO Reference Path")
         selected_lane=-1    
 
     return out_path,selected_lane

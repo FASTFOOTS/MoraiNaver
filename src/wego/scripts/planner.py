@@ -8,6 +8,7 @@ from nav_msgs.msg import Path,Odometry
 from std_msgs.msg import Float64,Int16,Float32MultiArray
 from geometry_msgs.msg import Vector3
 from geometry_msgs.msg import PoseStamped,Point,Twist
+from sensor_msgs.msg import LaserScan
 from utils import *
 import tf
 from math import cos,sin,sqrt,pow,atan2,pi
@@ -31,6 +32,8 @@ class gen_planner():
         self.path_name=arg[1]
         self.x_offset=float(arg[2])
         self.y_offset=float(arg[3])
+
+        self.scan_angle = np.linspace(0,360,723)
         
         path_reader=pathReader('wego') ## 경로 파일의 위치
 
@@ -54,6 +57,7 @@ class gen_planner():
         rospy.Subscriber("/gps", GPSMessage, self.gpsCB)
         self.image_sub = rospy.Subscriber("/imu", Imu, self.imuCB)
         self.ego_sub = rospy.Subscriber("/Ego_topic",EgoVehicleStatus, self.statusCB)
+        self.scan_sub = rospy.Subscriber("/scan", LaserScan, self.scanCB)
 
         #def
         self.is_status = False
@@ -79,7 +83,7 @@ class gen_planner():
         rate = rospy.Rate(50) # 30hz
 
         while not rospy.is_shutdown():
-            print(self.is_status , self.is_imu ,self.is_gps)
+            # print(self.is_status , self.is_imu ,self.is_gps)
             if self.is_status == True and self.is_imu == True and self.is_gps == True:
                 self.getScoutStatus()
                 ## global_path와 차량의 status_msg를 이용해 현제 waypoint와 local_path를 생성
@@ -123,7 +127,7 @@ class gen_planner():
                 local_path_pub.publish(local_path) ## Local Path 출력
                 ctrl_pub.publish(ctrl_msg) ## Vehicl Control 출력
                 odom_pub.publish(self.makeOdomMsg())
-                self.print_info()
+                #self.print_info()
             
                 if count==30 : ## global path 출력
                     global_path_pub.publish(self.global_path)
@@ -155,8 +159,26 @@ class gen_planner():
     def imuCB(self, data):
         self.euler_data = tf.transformations.euler_from_quaternion((data.orientation.x, data.orientation.y, data.orientation.z, data.orientation.w))
         self.is_imu = True
+    
+    def scanCB(self, data):
+        # a = []
+        min_dist = np.inf
+        min_idx = 0
+        self.scan_ranges = data.ranges
+        a = [round(i,2) for i in self.scan_ranges]
+        
+        for idx,val in enumerate(a): 
+            if min_dist > val:
+                min_dist = val
+                min_idx = idx
+        
+        min_angle = round(self.scan_angle[min_idx],2)
 
+        print(f"min dist : {min_dist}, min_angle : {min_angle}")
 
+        
+
+            
 
     def makeOdomMsg(self):
         odom=Odometry()
