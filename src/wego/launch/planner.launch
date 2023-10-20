@@ -1,5 +1,5 @@
 <launch>
     <!-- args="추종할 경로 이름" (x_offset) (y_offset)" -->
     <node pkg="wego" type="planner.py" name="planner" args="naver_sim.txt 314494.0581980597 4160624.929391573" output="screen" />
-    <!-- <node pkg="rviz" type="rviz" name="rviz" args="-d $(find wego)/rviz/planner.rviz" /> -->
+    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find wego)/rviz/planner.rviz" />
 </launch>

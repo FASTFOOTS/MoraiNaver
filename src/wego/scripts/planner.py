@@ -34,6 +34,8 @@ class gen_planner():
         self.y_offset=float(arg[3])
 
         self.scan_angle = np.linspace(0,360,723)
+        self.min_angle = 0.0
+        self.min_dist = 0.0
         
         path_reader=pathReader('wego') ## 경로 파일의 위치
 
@@ -80,7 +82,7 @@ class gen_planner():
     
         #time var
         count=0
-        rate = rospy.Rate(50) # 30hz
+        rate = rospy.Rate(30) # 30hz
 
         while not rospy.is_shutdown():
             # print(self.is_status , self.is_imu ,self.is_gps)
@@ -107,8 +109,23 @@ class gen_planner():
 
                 pure_pursuit.getPath(local_path) ## pure_pursuit 알고리즘에 Local path 적용
                 pure_pursuit.getEgoStatus(self.status_msg) ## pure_pursuit 알고리즘에 차량의 status 적용
-                # ctrl_msg.angular.z=-pure_pursuit.steering_angle()
-                ctrl_msg.steering=-pure_pursuit.steering_angle()
+                
+                ##### origin #####
+                # ctrl_msg.steering=-pure_pursuit.steering_angle()
+
+                ##### obstacle avoidance but not work #####
+                if self.min_dist < 10 and (150 < self.min_angle < 210):
+                    ctrl_msg.steering=-pure_pursuit.steering_angle() + 0.01*(self.min_angle - 180)
+                else:
+                    ctrl_msg.steering=-pure_pursuit.steering_angle()
+                
+                # if (580 < self.current_waypoint < 800) or (1180 < self.current_waypoint < 2077) or (2600 < self.current_waypoint < 2860) or (3395 < self.current_waypoint < 3578) or (3950 < self.current_waypoint < 5085) or (5600 < self.current_waypoint < 6097):
+                #     normal_velocity = 80/3.6
+                # else:
+                #     normal_velocity = 120/3.6
+                # vel_planner=velocityPlanning(normal_velocity,0.15) ## 속도 계획
+                # vel_profile=vel_planner.curveBasedVelocity(self.global_path,100)
+
                 target_velocity = vel_profile[self.current_waypoint]
                 # target_velocity = 100 # cc_vel
 
@@ -127,7 +144,7 @@ class gen_planner():
                 local_path_pub.publish(local_path) ## Local Path 출력
                 ctrl_pub.publish(ctrl_msg) ## Vehicl Control 출력
                 odom_pub.publish(self.makeOdomMsg())
-                #self.print_info()
+                # self.print_info()
             
                 if count==30 : ## global path 출력
                     global_path_pub.publish(self.global_path)
@@ -162,7 +179,7 @@ class gen_planner():
     
     def scanCB(self, data):
         # a = []
-        min_dist = np.inf
+        min_dist = 1000
         min_idx = 0
         self.scan_ranges = data.ranges
         a = [round(i,2) for i in self.scan_ranges]
@@ -172,9 +189,10 @@ class gen_planner():
                 min_dist = val
                 min_idx = idx
         
-        min_angle = round(self.scan_angle[min_idx],2)
+        self.min_angle = round(self.scan_angle[min_idx],2)
+        self.min_dist = min_dist
 
-        print(f"min dist : {min_dist}, min_angle : {min_angle}")
+        print(f"min dist : {self.min_dist}, min_angle : {self.min_angle}")
 
         
 
@@ -202,12 +220,12 @@ class gen_planner():
     def print_info(self):
 
         os.system('clear')
-        print('--------------------status-------------------------')
-        print('position :{0} ,{1}, {2}'.format(self.status_msg.position.x,self.status_msg.position.y,self.status_msg.position.z))
-        print('velocity :{} km/h'.format(self.status_msg.velocity.x))
-        print('heading :{} deg'.format(self.status_msg.heading))
+        # print('--------------------status-------------------------')
+        # print('position :{0} ,{1}, {2}'.format(self.status_msg.position.x,self.status_msg.position.y,self.status_msg.position.z))
+        # print('velocity :{} km/h'.format(self.status_msg.velocity.x))
+        # print('heading :{} deg'.format(self.status_msg.heading))
 
-        print('--------------------object-------------------------')
+        # print('--------------------object-------------------------')
         # print('object num :{}'.format(self.object_num))
         # for i in range(0,self.object_num) :
         #     print('{0} : type = {1}, x = {2}, y = {3}, z = {4} '.format(i,self.object_info_msg[0][i],self.object_info_msg[1][i],self.object_info_msg[2][i],self.object_info_msg[3][i]))

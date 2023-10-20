@@ -152,9 +152,9 @@ class purePursuit :
         self.is_look_forward_point = False
 
         # PID control constants
-        kp = 0.2  # Proportional gain
-        ki = 0.005  # Integral gain
-        kd = 0.00  # Derivative gain
+        kp = 0.1  # Proportional gain
+        ki = 0.001  # Integral gain
+        kd = 0.0  # Derivative gain
 
         # Initialize error terms
         previous_error = 0
