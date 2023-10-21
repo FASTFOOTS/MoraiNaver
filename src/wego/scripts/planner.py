@@ -15,8 +15,7 @@ from math import cos,sin,sqrt,pow,atan2,pi
 from morai_msgs.msg import GPSMessage, EgoVehicleStatus, CtrlCmd
 import pyproj
 from sensor_msgs.msg import Imu
-import threading
-import time
+
 
 class ego_status:
     def __init__(self):
@@ -87,17 +86,21 @@ class gen_planner():
 
         while not rospy.is_shutdown():
             # print(self.is_status , self.is_imu ,self.is_gps)
-            if self.is_status == True and self.is_imu == True and self.is_gps == True:
+            if self.is_status == True and self.is_imu == True and self.is_gps == True and self.is_obj == True:
                 self.getScoutStatus()
                 ## global_path와 차량의 status_msg를 이용해 현제 waypoint와 local_path를 생성
                 local_path,self.current_waypoint=findLocalPath(self.global_path,self.status_msg) 
                 
                 ## 장애물의 숫자와 Type 위치 속도 (object_num, object type, object pose_x, object pose_y, object velocity)
+                # self.vo.get_object(self.object_num,self.object_info_msg[0],self.object_info_msg[1],self.object_info_msg[2],self.object_info_msg[3])
+                # global_obj,local_obj=self.vo.calc_vaild_obj([self.status_msg.position.x,self.status_msg.position.y,(self.status_msg.heading)/180*pi])
 
                 ########################  lattice  ########################
                 vehicle_status=[self.status_msg.position.x,self.status_msg.position.y,(self.status_msg.heading)/180*pi,self.status_msg.velocity.x]
-                lattice_path,selected_lane=latticePlanner(local_path,vehicle_status,lattice_current_lane)
+                lattice_path,selected_lane=latticePlanner(local_path,self.object_info_msg,vehicle_status,lattice_current_lane)
                 lattice_current_lane=selected_lane
+                # print(f"lattice_current_lane : {lattice_current_lane}")
+                # print(f"selected_lane : {selected_lane}")
                                 
                 if selected_lane != -1: 
                     local_path=lattice_path[selected_lane]                
@@ -111,20 +114,10 @@ class gen_planner():
                 pure_pursuit.getPath(local_path) ## pure_pursuit 알고리즘에 Local path 적용
                 pure_pursuit.getEgoStatus(self.status_msg) ## pure_pursuit 알고리즘에 차량의 status 적용
                 
-                ##### origin #####
                 ctrl_msg.steering=-pure_pursuit.steering_angle()
 
-                ##### obstacle avoidance but not work #####
-                # if self.min_dist < 10 and (150 < self.min_angle < 210):
-                #     ctrl_msg.steering=-pure_pursuit.steering_angle() + 0.01*(self.min_angle - 180)
-                # else:
-                #     ctrl_msg.steering=-pure_pursuit.steering_angle()
-                
-
                 target_velocity = vel_profile[self.current_waypoint]
-                # target_velocity = 100 # cc_vel
 
-                # ctrl_msg.linear.x= max(target_velocity,0)
                 if target_velocity > self.velocity:
                     ctrl_msg.accel = 1
                     ctrl_msg.brake = 0
@@ -156,8 +149,8 @@ class gen_planner():
         br.sendTransform((self.status_msg.position.x, self.status_msg.position.y, self.status_msg.position.z),
                         tf.transformations.quaternion_from_euler(0, 0, (self.status_msg.heading)/180*pi),
                         rospy.Time.now(),
-                        "gps",
-                        "map")
+                        "base_link",
+                        "odom")
         self.is_status=True
 
     def statusCB(self, data):
@@ -172,31 +165,43 @@ class gen_planner():
         self.euler_data = tf.transformations.euler_from_quaternion((data.orientation.x, data.orientation.y, data.orientation.z, data.orientation.w))
         self.is_imu = True
     
+
+
     def scanCB(self, data):
-        # a = []
         min_dist = 1000
         min_idx = 0
-        self.scan_ranges = data.ranges
-        a = [round(i,2) for i in self.scan_ranges]
-        
-        for idx,val in enumerate(a): 
+        scan_ranges = [round(data,1) for data in data.ranges]
+
+        for idx, val in enumerate(scan_ranges): 
             if min_dist > val:
                 min_dist = val
                 min_idx = idx
-        
-        self.min_angle = round(self.scan_angle[min_idx],2)
-        self.min_dist = min_dist
 
-        print(f"min dist : {self.min_dist}, min_angle : {self.min_angle}")
+        angle_min = data.angle_min  # 첫 번째 스캔 데이터의 각도
+        angle_increment = data.angle_increment  # 각 스캔 데이터 사이의 각도 간격
+        min_angle = round(angle_min + min_idx * angle_increment,2)  # 최소 거리를 갖는 스캔 데이터의 각도
 
-        
+        min_dist_x = round(min_dist * cos(min_angle),2)  # x 좌표 계산
+        min_dist_y = round(min_dist * sin(min_angle),2)  # y 좌표 계산
+        print(f"obj x,y : ({min_dist_x},{min_dist_y})")
+
+        if min_dist_x < 15 and abs(min_dist_y) < 2.5:
+            self.object_info_msg=[[1,min_dist_x,min_dist_y,0]]
+            self.object_num = 1
+        else:
+            self.object_info_msg=[[1,1000,1000,0]]
+            self.object_num = 0
+
+        self.is_obj=True
+
+            
 
             
 
     def makeOdomMsg(self):
         odom=Odometry()
         odom.header.frame_id='map'
-        odom.child_frame_id='gps'
+        odom.child_frame_id='base_link'
 
         quaternion = tf.transformations.quaternion_from_euler(0, 0, np.deg2rad(self.status_msg.heading))
 
@@ -230,37 +235,9 @@ class gen_planner():
         print('current waypoint : {} '.format(self.current_waypoint))
 
 
-class NormalVelocityUpdater(gen_planner):
-    def __init__(self, planner):
-        self.planner = planner
-        self.normal_velocity = 80  # 초기 속도 (80 km/h)
-        # self.update_interval = 5.0  # 업데이트 간격 (초)
-
-    def start(self):
-        # 별도의 스레드에서 self.update_velocity() 메서드 실행
-        self.updater_thread = threading.Thread(target=self.update_velocity)
-        self.updater_thread.daemon = True
-        self.updater_thread.start()
-
-    def update_velocity(self):
-        while True:
-            if (580 < self.current_waypoint < 800) or (1180 < self.current_waypoint < 2077) or (2600 < self.current_waypoint < 2860) or (3395 < self.current_waypoint < 3578) or (3950 < self.current_waypoint < 5085) or (5600 < self.current_waypoint < 6097):
-                normal_velocity = 80/3.6
-            else:
-                normal_velocity = 120/3.6
-            vel_planner=velocityPlanning(normal_velocity,0.15) ## 속도 계획
-            vel_profile=vel_planner.curveBasedVelocity(self.global_path,100)
-            
-            # time.sleep(self.update_interval)
     
 if __name__ == '__main__':
     try:
-        # Planner 객체 생성
-        kcity_pathtracking = gen_planner()
-
-        # NormalVelocityUpdater 시작
-        velocity_updater = NormalVelocityUpdater(kcity_pathtracking)
-        velocity_updater.start()
-
+        kcity_pathtracking=gen_planner()
     except rospy.ROSInterruptException:
         pass

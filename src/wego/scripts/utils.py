@@ -152,9 +152,9 @@ class purePursuit :
         self.is_look_forward_point = False
 
         # PID control constants
-        kp = 0.1  # Proportional gain
-        ki = 0.001  # Integral gain
-        kd = 0.0  # Derivative gain
+        kp = 0.10  # Proportional gain
+        ki = 0.01  # Integral gain
+        kd = 0.01  # Derivative gain
 
         # Initialize error terms
         previous_error = 0
@@ -270,7 +270,7 @@ class pidController : ## 속도 제어를 위한 PID 적용 ##
 
 ########################  lattice  ########################
 
-def latticePlanner(ref_path,vehicle_status,current_lane):
+def latticePlanner(ref_path,global_vaild_object,vehicle_status,current_lane):
     out_path=[]
     selected_lane=-1
     lattic_current_lane=current_lane
@@ -380,7 +380,34 @@ def latticePlanner(ref_path,vehicle_status,current_lane):
         lane_weight=[6,4,2,0,2,4,6] #reference path 
         collision_bool=[False,False,False,False,False,False,False]
 
-    
+        if len(global_vaild_object)>0:
+
+            for obj in global_vaild_object :
+                if  obj[0]==2 or obj[0]==1 : 
+                    for path_num in range(len(out_path)) :
+
+                        for path_pos in out_path[path_num].poses :
+                            
+                            dis= sqrt(pow(obj[1],2)+pow(obj[2],2))
+                            # print(f"dis : {dis}")
+
+                            if dis<20:
+                                # print("obj detected")
+                                collision_bool[path_num]=True
+                                # lane_weight[path_num]=lane_weight[path_num]+100
+                                lane_weight[1]=lane_weight[1]+100
+                                lane_weight[2]=lane_weight[2]+100
+                                lane_weight[3]=lane_weight[3]+100
+                                lane_weight[4]=lane_weight[4]+100
+                                lane_weight[5]=lane_weight[5]+100
+                                if obj[2] >= 0:
+                                    lane_weight[0]=lane_weight[0]+1
+                                else:
+                                    lane_weight[6]=lane_weight[6]+1
+                                break
+        else :
+            print("No Obstacle")
+        # print(f"lane_weight : {lane_weight}")
         selected_lane=lane_weight.index(min(lane_weight))
         # print(lane_weight,selected_lane)
         all_lane_collision=True
