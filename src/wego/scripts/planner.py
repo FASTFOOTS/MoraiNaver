@@ -15,7 +15,8 @@ from math import cos,sin,sqrt,pow,atan2,pi
 from morai_msgs.msg import GPSMessage, EgoVehicleStatus, CtrlCmd
 import pyproj
 from sensor_msgs.msg import Imu
-
+import threading
+import time
 
 class ego_status:
     def __init__(self):
@@ -119,12 +120,6 @@ class gen_planner():
                 # else:
                 #     ctrl_msg.steering=-pure_pursuit.steering_angle()
                 
-                # if (580 < self.current_waypoint < 800) or (1180 < self.current_waypoint < 2077) or (2600 < self.current_waypoint < 2860) or (3395 < self.current_waypoint < 3578) or (3950 < self.current_waypoint < 5085) or (5600 < self.current_waypoint < 6097):
-                #     normal_velocity = 80/3.6
-                # else:
-                #     normal_velocity = 120/3.6
-                # vel_planner=velocityPlanning(normal_velocity,0.15) ## 속도 계획
-                # vel_profile=vel_planner.curveBasedVelocity(self.global_path,100)
 
                 target_velocity = vel_profile[self.current_waypoint]
                 # target_velocity = 100 # cc_vel
@@ -235,9 +230,37 @@ class gen_planner():
         print('current waypoint : {} '.format(self.current_waypoint))
 
 
+class NormalVelocityUpdater(gen_planner):
+    def __init__(self, planner):
+        self.planner = planner
+        self.normal_velocity = 80  # 초기 속도 (80 km/h)
+        # self.update_interval = 5.0  # 업데이트 간격 (초)
+
+    def start(self):
+        # 별도의 스레드에서 self.update_velocity() 메서드 실행
+        self.updater_thread = threading.Thread(target=self.update_velocity)
+        self.updater_thread.daemon = True
+        self.updater_thread.start()
+
+    def update_velocity(self):
+        while True:
+            if (580 < self.current_waypoint < 800) or (1180 < self.current_waypoint < 2077) or (2600 < self.current_waypoint < 2860) or (3395 < self.current_waypoint < 3578) or (3950 < self.current_waypoint < 5085) or (5600 < self.current_waypoint < 6097):
+                normal_velocity = 80/3.6
+            else:
+                normal_velocity = 120/3.6
+            vel_planner=velocityPlanning(normal_velocity,0.15) ## 속도 계획
+            vel_profile=vel_planner.curveBasedVelocity(self.global_path,100)
+            
+            # time.sleep(self.update_interval)
     
 if __name__ == '__main__':
     try:
-        kcity_pathtracking=gen_planner()
+        # Planner 객체 생성
+        kcity_pathtracking = gen_planner()
+
+        # NormalVelocityUpdater 시작
+        velocity_updater = NormalVelocityUpdater(kcity_pathtracking)
+        velocity_updater.start()
+
     except rospy.ROSInterruptException:
         pass
