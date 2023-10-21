@@ -151,6 +151,7 @@ class purePursuit :
         rotated_point = Point()
         self.is_look_forward_point = False
 
+        # It works, but not stable
         # PID control constants
         kp = 0.10  # Proportional gain
         ki = 0.01  # Integral gain
