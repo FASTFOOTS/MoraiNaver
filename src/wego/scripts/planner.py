@@ -83,16 +83,6 @@ class gen_planner():
         #time var
         count=0
         rate = rospy.Rate(30) # 30hz
-    def control_speed(self, target_velocity):
-        # Add conditions to adjust speed based on specific waypoints
-        if (580 < self.current_waypoint < 800) or (1180 < self.current_waypoint < 2077) or (2600 < self.current_waypoint < 2860) or (3395 < self.current_waypoint < 3578) or (3950 < self.current_waypoint < 5085) or (5600 < self.current_waypoint < 6097):
-            # Set a lower target velocity for specific waypoints
-            return min(target_velocity, 80)  # Adjust the 80 to your desired speed
-        else:
-            # For all other waypoints, use the original target_velocity
-            return target_velocity
-    
-    def main_loop(self):
 
         while not rospy.is_shutdown():
             # print(self.is_status , self.is_imu ,self.is_gps)
@@ -136,17 +126,17 @@ class gen_planner():
                 # vel_planner=velocityPlanning(normal_velocity,0.15) ## 속도 계획
                 # vel_profile=vel_planner.curveBasedVelocity(self.global_path,100)
 
-                adjusted_target_velocity = self.control_speed(vel_profile[self.current_waypoint])                # target_velocity = 100 # cc_vel
+                target_velocity = vel_profile[self.current_waypoint]
+                # target_velocity = 100 # cc_vel
 
-                ctrl_msg.linear.x= max(adjusted_target_velocity,0)
-
-                if adjusted_target_velocity > self.velocity:
+                # ctrl_msg.linear.x= max(target_velocity,0)
+                if target_velocity > self.velocity:
                     ctrl_msg.accel = 1
                     ctrl_msg.brake = 0
-                else: # adjusted_target_velocity <= self.velocity:
+                else: # target_velocity <= self.velocity:
                     ctrl_msg.accel = 0
                     ctrl_msg.brake = 0
-                    if self.velocity > adjusted_target_velocity + 5:
+                    if self.velocity > target_velocity + 5:
                         ctrl_msg.accel = 0
                         ctrl_msg.brake = 1
 
@@ -202,8 +192,7 @@ class gen_planner():
         self.min_angle = round(self.scan_angle[min_idx],2)
         self.min_dist = min_dist
 
-        print(f"min_dist : {self.min_dist}, min_angle : {self.min_angle}")
-        
+        print(f"min dist : {self.min_dist}, min_angle : {self.min_angle}")
 
         
 
