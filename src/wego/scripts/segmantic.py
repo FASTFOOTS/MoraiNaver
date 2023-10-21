@@ -19,13 +19,17 @@ class Segmantic_detection:
         # Convert to HSV color space
         hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
+        # In Morai, segmatic real color in HSV
+        # traffic_light : np.array([255, 74, 240])
+        # load_sign : np.array([204, 127, 51])
+        
         # Define range of traffic_light color in HSV
-        traffic_light_lower = np.array([255, 74, 240])
-        traffic_light_upper = np.array([255, 74, 240])
+        traffic_light_lower = np.array([250, 70, 235])
+        traffic_light_upper = np.array([260, 80, 245])
 
         # Define range of road_sign color in HSV
-        load_sign_lower = np.array([204, 127, 51])
-        load_sign_upper = np.array([204, 127, 51])
+        load_sign_lower = np.array([200, 125, 45])
+        load_sign_upper = np.array([210, 135, 55])
 
         # Threshold the HSV image to get only traffic_light colors
         traffic_light_mask = cv2.inRange(hsv, traffic_light_lower, traffic_light_upper)
