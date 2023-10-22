@@ -57,9 +57,9 @@ class gen_planner():
     
         #subscriber
         rospy.Subscriber("/gps", GPSMessage, self.gpsCB)
-        self.image_sub = rospy.Subscriber("/imu", Imu, self.imuCB)
-        self.ego_sub = rospy.Subscriber("/Ego_topic",EgoVehicleStatus, self.statusCB)
-        self.scan_sub = rospy.Subscriber("/scan", LaserScan, self.scanCB)
+        self.image_sub = rospy.Subscriber("/imu", Imu, self.imuCB, queue_size=10)
+        self.ego_sub = rospy.Subscriber("/Ego_topic",EgoVehicleStatus, self.statusCB, queue_size = 10)
+        self.scan_sub = rospy.Subscriber("/scan", LaserScan, self.scanCB, queue_size = 10)
 
         #def
         self.is_status = False
@@ -73,9 +73,27 @@ class gen_planner():
 
         self.global_path = path_reader.read_txt(self.path_name)
 
-        normal_velocity = 80/3.6 # km/h -> m/s
-        vel_planner=velocityPlanning(normal_velocity,0.15) ## 속도 계획
-        vel_profile=vel_planner.curveBasedVelocity(self.global_path,100)
+        normal_velocity_30 = 30/3.6 # km/h -> m/s
+        vel_planner_30=velocityPlanning(normal_velocity_30,0.15) ## 속도 계획
+        vel_profile_30=vel_planner_30.curveBasedVelocity(self.global_path,100)
+
+        # normal_velocity_50 = 50/3.6 # km/h -> m/s
+        # vel_planner_50=velocityPlanning(normal_velocity_50,0.15) ## 속도 계획
+        # vel_profile_50=vel_planner_50.curveBasedVelocity(self.global_path,100)
+
+        normal_velocity_70 = 70/3.6 # km/h -> m/s
+        vel_planner_70=velocityPlanning(normal_velocity_70,0.15) ## 속도 계획
+        vel_profile_70=vel_planner_70.curveBasedVelocity(self.global_path,100)
+
+        normal_velocity_90 = 90/3.6 # km/h -> m/s
+        vel_planner_90=velocityPlanning(normal_velocity_90,0.15) ## 속도 계획
+        vel_profile_90=vel_planner_90.curveBasedVelocity(self.global_path,100)
+
+        # normal_velocity_120 = 120/3.6 # km/h -> m/s
+        # vel_planner_120=velocityPlanning(normal_velocity_120,0.15) ## 속도 계획
+        # vel_profile_120=vel_planner_120.curveBasedVelocity(self.global_path,100)
+
+        
 
         lattice_current_lane=3
 
@@ -116,7 +134,36 @@ class gen_planner():
                 
                 ctrl_msg.steering=-pure_pursuit.steering_angle()
 
-                target_velocity = vel_profile[self.current_waypoint]
+                if abs(ctrl_msg.steering) > 4.5:
+                    target_velocity = vel_profile_30[self.current_waypoint]
+                else:
+                    if self.obstacle_detected:
+                        target_velocity = vel_profile_30[self.current_waypoint]
+                    else:
+                        if (0 < self.current_waypoint < 240) or \
+                        (650 < self.current_waypoint <  778) or \
+                        (1330 < self.current_waypoint < 1450) or \
+                        (2056 < self.current_waypoint < 2150) or \
+                        (2780 < self.current_waypoint < 2921) or \
+                        (3530 < self.current_waypoint < 3630) or \
+                        (4200 < self.current_waypoint < 4300) or \
+                        (5090 < self.current_waypoint < 5160) or \
+                        (5650 < self.current_waypoint < 5990):
+                            target_velocity = vel_profile_30[self.current_waypoint]
+                        elif (778 < self.current_waypoint < 1300) or \
+                            (2150 < self.current_waypoint < 2700) or \
+                            (2921 < self.current_waypoint < 3300) or \
+                            (3800 < self.current_waypoint < 4190) or \
+                            (5160 < self.current_waypoint < 5600):
+                                target_velocity = vel_profile_90[self.current_waypoint]
+                        else:
+                            target_velocity = vel_profile_70[self.current_waypoint]
+
+                if self.velocity > 50 and self.ctrl_msg.steering > 3.5:
+                    target_velocity = vel_profile_30[self.current_waypoint]
+                
+                # target_velocity = vel_profile[self.current_waypoint]
+
 
                 if target_velocity > self.velocity:
                     ctrl_msg.accel = 1
@@ -124,15 +171,16 @@ class gen_planner():
                 else: # target_velocity <= self.velocity:
                     ctrl_msg.accel = 0
                     ctrl_msg.brake = 0
-                    if self.velocity > target_velocity + 5:
+                    if self.velocity > target_velocity + 1:
                         ctrl_msg.accel = 0
                         ctrl_msg.brake = 1
 
+                
 
                 local_path_pub.publish(local_path) ## Local Path 출력
                 ctrl_pub.publish(ctrl_msg) ## Vehicl Control 출력
                 odom_pub.publish(self.makeOdomMsg())
-                # self.print_info()
+                self.print_info()
             
                 if count==30 : ## global path 출력
                     global_path_pub.publish(self.global_path)
@@ -188,9 +236,11 @@ class gen_planner():
         if min_dist_x < 15 and abs(min_dist_y) < 2.5:
             self.object_info_msg=[[1,min_dist_x,min_dist_y,0]]
             self.object_num = 1
+            self.obstacle_detected = True
         else:
             self.object_info_msg=[[1,1000,1000,0]]
             self.object_num = 0
+            self.obstacle_detected = False
 
         self.is_obj=True
 

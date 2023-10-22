@@ -155,9 +155,9 @@ class purePursuit :
         # PID control constants
         # emoji test
         # title test
-        kp = 0.10  # Proportional gain
-        ki = 0.01  # Integral gain
-        kd = 0.005  # Derivative gain
+        kp = 0.1  # Proportional gain
+        ki = 0.01#0.01  # Integral gain
+        kd = 0.005#0.005  # Derivative gain
 
         # Initialize error terms
         previous_error = 0
@@ -299,7 +299,7 @@ def latticePlanner(ref_path,global_vaild_object,vehicle_status,current_lane):
         local_end_point=det_t.dot(world_end_point)
         world_ego_vehicle_position=np.array([[vehicle_status[0]],[vehicle_status[1]],[1]])
         local_ego_vehicle_position=det_t.dot(world_ego_vehicle_position)
-        lane_off_set=[3.9,2.6,1.3,0,-1.3,-2.6,-3.9]
+        lane_off_set=[4.2,3.0,1.5,0,-1.5,-3.0,-4.2]
         local_lattice_points=[]
         for i in range(len(lane_off_set)):
             local_lattice_points.append([local_end_point[0][0],local_end_point[1][0]+lane_off_set[i],1])
