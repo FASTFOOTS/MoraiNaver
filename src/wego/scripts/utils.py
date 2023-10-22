@@ -157,7 +157,7 @@ class purePursuit :
         # title test
         kp = 0.10  # Proportional gain
         ki = 0.01  # Integral gain
-        kd = 0.01  # Derivative gain
+        kd = 0.005  # Derivative gain
 
         # Initialize error terms
         previous_error = 0
