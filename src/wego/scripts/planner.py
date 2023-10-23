@@ -14,7 +14,9 @@ import tf
 from math import cos,sin,sqrt,pow,atan2,pi
 from morai_msgs.msg import GPSMessage, EgoVehicleStatus, CtrlCmd
 import pyproj
-from sensor_msgs.msg import Imu
+from sensor_msgs.msg import Imu, CompressedImage, Image
+from cv_bridge import CvBridge
+import cv2
 
 
 class ego_status:
@@ -26,6 +28,7 @@ class ego_status:
 
 class gen_planner():
     def __init__(self):
+        self.bridge = CvBridge()
         rospy.init_node('gen_planner', anonymous=True)
 
         arg = rospy.myargv(argv=sys.argv)
@@ -36,6 +39,10 @@ class gen_planner():
         self.scan_angle = np.linspace(0,360,723)
         self.min_angle = 0.0
         self.min_dist = 0.0
+
+        self.object_info_msg = []
+
+        abs_flag = True
         
         path_reader=pathReader('wego') ## 경로 파일의 위치
 
@@ -43,9 +50,11 @@ class gen_planner():
         global_path_pub= rospy.Publisher('/global_path',Path, queue_size=1) ## global_path publisher
         local_path_pub= rospy.Publisher('/local_path',Path, queue_size=1) ## local_path publisher
         ctrl_pub = rospy.Publisher('/ctrl_cmd',CtrlCmd, queue_size=1) ## Vehicl Control
-        ctrl_msg= CtrlCmd()
         odom_pub = rospy.Publisher('odom',Odometry, queue_size=1)
+        # obj_pub = rospy.Publisher('/semantic_obstacle/compressed', CompressedImage, queue_size=1)
+        ctrl_msg= CtrlCmd()
         self.status_msg = ego_status()
+
         
 
         ########################  lattice   ########################
@@ -57,9 +66,10 @@ class gen_planner():
     
         #subscriber
         rospy.Subscriber("/gps", GPSMessage, self.gpsCB)
-        self.image_sub = rospy.Subscriber("/imu", Imu, self.imuCB, queue_size=10)
-        self.ego_sub = rospy.Subscriber("/Ego_topic",EgoVehicleStatus, self.statusCB, queue_size = 10)
-        self.scan_sub = rospy.Subscriber("/scan", LaserScan, self.scanCB, queue_size = 10)
+        self.imu_sub = rospy.Subscriber("/imu", Imu, self.imuCB, queue_size=1)
+        self.ego_sub = rospy.Subscriber("/Ego_topic",EgoVehicleStatus, self.statusCB, queue_size = 1)
+        self.scan_sub = rospy.Subscriber("/scan", LaserScan, self.scanCB, queue_size = 1)
+        self.image_sub = rospy.Subscriber("/segmantic_image_jpeg/compressed", CompressedImage, self.img_CB)
 
         #def
         self.is_status = False
@@ -77,9 +87,9 @@ class gen_planner():
         vel_planner_30=velocityPlanning(normal_velocity_30,0.15) ## 속도 계획
         vel_profile_30=vel_planner_30.curveBasedVelocity(self.global_path,100)
 
-        # normal_velocity_50 = 50/3.6 # km/h -> m/s
-        # vel_planner_50=velocityPlanning(normal_velocity_50,0.15) ## 속도 계획
-        # vel_profile_50=vel_planner_50.curveBasedVelocity(self.global_path,100)
+        normal_velocity_10 = 10/3.6 # km/h -> m/s
+        vel_planner_10=velocityPlanning(normal_velocity_10,0.15) ## 속도 계획
+        vel_profile_10=vel_planner_10.curveBasedVelocity(self.global_path,100)
 
         normal_velocity_70 = 70/3.6 # km/h -> m/s
         vel_planner_70=velocityPlanning(normal_velocity_70,0.15) ## 속도 계획
@@ -100,7 +110,7 @@ class gen_planner():
     
         #time var
         count=0
-        rate = rospy.Rate(30) # 30hz
+        rate = rospy.Rate(50) # 30hz
 
         while not rospy.is_shutdown():
             # print(self.is_status , self.is_imu ,self.is_gps)
@@ -135,7 +145,10 @@ class gen_planner():
                 ctrl_msg.steering=-pure_pursuit.steering_angle()
 
                 if abs(ctrl_msg.steering) > 4.5:
-                    target_velocity = vel_profile_30[self.current_waypoint]
+                    if abs(ctrl_msg.steering) > 8.0:
+                        target_velocity = vel_profile_10[self.current_waypoint]
+                    else:
+                        target_velocity = vel_profile_30[self.current_waypoint]
                 else:
                     if self.obstacle_detected:
                         target_velocity = vel_profile_30[self.current_waypoint]
@@ -159,12 +172,12 @@ class gen_planner():
                         else:
                             target_velocity = vel_profile_70[self.current_waypoint]
 
-                if self.velocity > 50 and self.ctrl_msg.steering > 3.5:
-                    target_velocity = vel_profile_30[self.current_waypoint]
+                # if self.velocity > 25 and ctrl_msg.steering > 3.5:
+                #     target_velocity = vel_profile_10[self.current_waypoint]
                 
                 # target_velocity = vel_profile[self.current_waypoint]
 
-
+                # speed control method
                 if target_velocity > self.velocity:
                     ctrl_msg.accel = 1
                     ctrl_msg.brake = 0
@@ -175,12 +188,19 @@ class gen_planner():
                         ctrl_msg.accel = 0
                         ctrl_msg.brake = 1
 
-                
+                # Anti-Lock Braking System 
+                if (ctrl_msg.brake == 1) and (ctrl_msg.steering > 0.5):
+                    if abs_flag:
+                        ctrl_msg.brake = 0
+                        abs_flag = False
+                    else:
+                        ctrl_msg.brake = 1
+                        abs_flag = True
 
                 local_path_pub.publish(local_path) ## Local Path 출력
                 ctrl_pub.publish(ctrl_msg) ## Vehicl Control 출력
                 odom_pub.publish(self.makeOdomMsg())
-                self.print_info()
+                # self.print_info()
             
                 if count==30 : ## global path 출력
                     global_path_pub.publish(self.global_path)
@@ -213,8 +233,6 @@ class gen_planner():
         self.euler_data = tf.transformations.euler_from_quaternion((data.orientation.x, data.orientation.y, data.orientation.z, data.orientation.w))
         self.is_imu = True
     
-
-
     def scanCB(self, data):
         min_dist = 1000
         min_idx = 0
@@ -231,12 +249,14 @@ class gen_planner():
 
         min_dist_x = round(min_dist * cos(min_angle),2)  # x 좌표 계산
         min_dist_y = round(min_dist * sin(min_angle),2)  # y 좌표 계산
-        print(f"obj x,y : ({min_dist_x},{min_dist_y})")
+        
 
-        if min_dist_x < 15 and abs(min_dist_y) < 2.5:
-            self.object_info_msg=[[1,min_dist_x,min_dist_y,0]]
+        if abs(min_dist_y) < 2.8:#min_dist_x < 15 and abs(min_dist_y) < 2.5:
+            # self.object_info_msg=[[1,min_dist_x + self.status_msg.position.x,min_dist_y + self.status_msg.position.y,0]]/
+            self.object_info_msg=[[1,min_dist_x, min_dist_y,0]]
             self.object_num = 1
             self.obstacle_detected = True
+            # print(f"obj x,y : ({min_dist_x},{min_dist_y})")
         else:
             self.object_info_msg=[[1,1000,1000,0]]
             self.object_num = 0
@@ -244,9 +264,49 @@ class gen_planner():
 
         self.is_obj=True
 
-            
+    def detect_color(self, img):
+        # Convert to HSV color space
+        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
-            
+        # Define range of yellow color in HSV
+        yellow_lower = np.array([18, 100, 100])
+        yellow_upper = np.array([32, 255, 255])
+
+        # Threshold the HSV image to get only yellow colors
+        yellow_mask = cv2.inRange(hsv, yellow_lower, yellow_upper)
+        yellow_color = cv2.bitwise_and(img, img, mask=yellow_mask)
+        return yellow_color
+
+    def img_binary(self, blend_line):
+        bin = cv2.cvtColor(blend_line, cv2.COLOR_BGR2GRAY)
+        binary_line = np.zeros_like(bin)
+        binary_line[bin >127] = 1
+        return binary_line
+    
+    def detect_obj(self, bin_img):
+        bottom_half_y = bin_img.shape[0] * 2 / 3
+        histogram = np.sum(bin_img[int(bottom_half_y) :, :], axis=0)
+        histogram[histogram < 25] = 0
+        print(f"histogram : {histogram}")
+
+        obj_base = np.argmax(histogram)
+        print(f"obj_base : {obj_base}")
+
+        return obj_base
+
+    def img_CB(self, data):
+        img = self.bridge.compressed_imgmsg_to_cv2(data)
+        yellow_obj = self.detect_color(img)
+        bin_img = self.img_binary(yellow_obj)
+        detected_obj = self.detect_obj(bin_img)
+        obj_y_value = (320 - detected_obj) / 20
+        
+        if 200 < detected_obj < 500:
+            self.object_info_msg.append([1,5,obj_y_value,0])
+            self.obstacle_detected = True
+            print(self.object_info_msg)
+        else:
+            print("noting detected by semantic camera")
 
     def makeOdomMsg(self):
         odom=Odometry()
@@ -266,7 +326,6 @@ class gen_planner():
 
         return odom
 
-
     def print_info(self):
 
         os.system('clear')
@@ -284,10 +343,10 @@ class gen_planner():
         print('all waypoint size: {} '.format(len(self.global_path.poses)))
         print('current waypoint : {} '.format(self.current_waypoint))
 
-
-    
+ 
 if __name__ == '__main__':
     try:
         kcity_pathtracking=gen_planner()
+        rospy.spin()
     except rospy.ROSInterruptException:
         pass

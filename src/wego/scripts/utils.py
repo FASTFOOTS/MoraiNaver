@@ -125,9 +125,9 @@ class purePursuit :
         self.forward_point=Point()
         self.current_postion=Point()
         self.is_look_forward_point=False
-        self.vehicle_length=0.4
-        self.lfd=0.5
-        self.min_lfd=0.3
+        self.vehicle_length=5.0
+        self.lfd=1.5
+        self.min_lfd=1.0
         self.max_lfd=9
         self.steering=0
         
@@ -155,9 +155,9 @@ class purePursuit :
         # PID control constants
         # emoji test
         # title test
-        kp = 0.1  # Proportional gain
-        ki = 0.01#0.01  # Integral gain
-        kd = 0.005#0.005  # Derivative gain
+        kp = 0.01  # Proportional gain
+        ki = 0.001#0.01  # Integral gain
+        kd = 0.0005#0.005  # Derivative gain
 
         # Initialize error terms
         previous_error = 0
@@ -299,7 +299,7 @@ def latticePlanner(ref_path,global_vaild_object,vehicle_status,current_lane):
         local_end_point=det_t.dot(world_end_point)
         world_ego_vehicle_position=np.array([[vehicle_status[0]],[vehicle_status[1]],[1]])
         local_ego_vehicle_position=det_t.dot(world_ego_vehicle_position)
-        lane_off_set=[4.2,3.0,1.5,0,-1.5,-3.0,-4.2]
+        lane_off_set=[4.2,3.5,2.8,0,-2.8,-3.5,-4.2]
         local_lattice_points=[]
         for i in range(len(lane_off_set)):
             local_lattice_points.append([local_end_point[0][0],local_end_point[1][0]+lane_off_set[i],1])
@@ -392,9 +392,16 @@ def latticePlanner(ref_path,global_vaild_object,vehicle_status,current_lane):
                         for path_pos in out_path[path_num].poses :
                             
                             dis= sqrt(pow(obj[1],2)+pow(obj[2],2))
-                            # print(f"dis : {dis}")
+                            # dis= sqrt(pow(obj[1]-path_pos.pose.position.x,2)+pow(obj[2]-path_pos.pose.position.y,2))
+                            
+                            # if dis<3:
+                            #     collision_bool[path_num]=True
+                            #     lane_weight[path_num]=lane_weight[path_num]+100
+                                
+                            #     break
 
-                            if dis<20:
+                            if dis<10 + 20*(vehicle_status[3]/30):
+                                # 30km/h -> 20, 60km/h -> 40 90km/h -> 60
                                 # print("obj detected")
                                 collision_bool[path_num]=True
                                 # lane_weight[path_num]=lane_weight[path_num]+100
@@ -408,6 +415,8 @@ def latticePlanner(ref_path,global_vaild_object,vehicle_status,current_lane):
                                 else:
                                     lane_weight[6]=lane_weight[6]+1
                                 break
+            # print(lane_weight)
+            # print(dis)
         else :
             print("No Obstacle")
         # print(f"lane_weight : {lane_weight}")
