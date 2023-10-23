@@ -110,7 +110,7 @@ class gen_planner():
     
         #time var
         count=0
-        rate = rospy.Rate(50) # 30hz
+        rate = rospy.Rate(30) # 30hz
 
         while not rospy.is_shutdown():
             # print(self.is_status , self.is_imu ,self.is_gps)
@@ -143,9 +143,9 @@ class gen_planner():
                 pure_pursuit.getEgoStatus(self.status_msg) ## pure_pursuit 알고리즘에 차량의 status 적용
                 
                 ctrl_msg.steering=-pure_pursuit.steering_angle()
-
-                if abs(ctrl_msg.steering) > 4.5:
-                    if abs(ctrl_msg.steering) > 8.0:
+                
+                if abs(self.wheel_angle) > 4.5:
+                    if abs(self.wheel_angle) > 8.0:
                         target_velocity = vel_profile_10[self.current_waypoint]
                     else:
                         target_velocity = vel_profile_30[self.current_waypoint]
@@ -153,8 +153,9 @@ class gen_planner():
                     if self.obstacle_detected:
                         target_velocity = vel_profile_30[self.current_waypoint]
                     else:
-                        if (0 < self.current_waypoint < 240) or \
-                        (650 < self.current_waypoint <  778) or \
+                        if (0 < self.current_waypoint < 240):
+                            target_velocity = vel_profile_30[self.current_waypoint]
+                        elif(650 < self.current_waypoint <  778) or \
                         (1330 < self.current_waypoint < 1450) or \
                         (2056 < self.current_waypoint < 2150) or \
                         (2780 < self.current_waypoint < 2921) or \
@@ -162,7 +163,7 @@ class gen_planner():
                         (4200 < self.current_waypoint < 4300) or \
                         (5090 < self.current_waypoint < 5160) or \
                         (5650 < self.current_waypoint < 5990):
-                            target_velocity = vel_profile_30[self.current_waypoint]
+                            target_velocity = vel_profile_70[self.current_waypoint]
                         elif (778 < self.current_waypoint < 1300) or \
                             (2150 < self.current_waypoint < 2700) or \
                             (2921 < self.current_waypoint < 3300) or \
@@ -171,6 +172,14 @@ class gen_planner():
                                 target_velocity = vel_profile_90[self.current_waypoint]
                         else:
                             target_velocity = vel_profile_70[self.current_waypoint]
+                    
+                    if abs(ctrl_msg.steering) > 4.5:
+                        target_velocity = vel_profile_30[self.current_waypoint]
+
+                    if abs(ctrl_msg.steering) > 8.0:
+                        target_velocity = vel_profile_10[self.current_waypoint]
+                        
+                print(f"target_velocity : {round(target_velocity * 3.6, 0)}")
 
                 # if self.velocity > 25 and ctrl_msg.steering > 3.5:
                 #     target_velocity = vel_profile_10[self.current_waypoint]
@@ -223,6 +232,7 @@ class gen_planner():
 
     def statusCB(self, data):
         self.velocity = data.velocity.x
+        self.wheel_angle = data.wheel_angle
         self.is_status = True
 
     def gpsCB(self, data):
@@ -347,6 +357,5 @@ class gen_planner():
 if __name__ == '__main__':
     try:
         kcity_pathtracking=gen_planner()
-        rospy.spin()
     except rospy.ROSInterruptException:
         pass
