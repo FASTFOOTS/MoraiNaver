@@ -108,6 +108,8 @@ class velocityPlanning :
 
         for i in range(len(global_path.poses)-point_num,len(global_path.poses)):
             out_vel_plan.append(self.car_max_speed)
+
+        out_vel_plan = [round(data,1) for data in out_vel_plan]
         
         return out_vel_plan
 

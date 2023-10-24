@@ -14,10 +14,32 @@ import tf
 from math import cos,sin,sqrt,pow,atan2,pi
 from morai_msgs.msg import GPSMessage, EgoVehicleStatus, CtrlCmd
 import pyproj
-from sensor_msgs.msg import Imu, CompressedImage, Image
-from cv_bridge import CvBridge
-import cv2
+from sensor_msgs.msg import Imu
+import threading
+import time
 
+class NormalVelocityUpdater():
+    def __init__(self, planner):
+        self.planner = planner
+        self.normal_velocity = 80  # 초기 속도 (80 km/h)
+        self.vel_profile = []
+        # self.update_interval = 5.0  # 업데이트 간격 (초)
+
+    def start(self):
+        # 별도의 스레드에서 self.update_velocity() 메서드 실행
+        self.updater_thread = threading.Thread(target=self.update_velocity)
+        self.updater_thread.daemon = True
+        self.updater_thread.start()
+
+    def update_velocity(self):
+        while True:
+            
+            if (580 < self.current_waypoint < 800) or (1180 < self.current_waypoint < 2077) or (2600 < self.current_waypoint < 2860) or (3395 < self.current_waypoint < 3578) or (3950 < self.current_waypoint < 5085) or (5600 < self.current_waypoint < 6097):
+                normal_velocity = 80/3.6
+            else:
+                normal_velocity = 120/3.6
+            vel_planner=velocityPlanning(normal_velocity,0.15) ## 속도 계획
+            self.vel_profile=vel_planner.curveBasedVelocity(self.global_path,100)
 
 class ego_status:
     def __init__(self):
@@ -26,9 +48,8 @@ class ego_status:
         self.velocity = Vector3()
 
 
-class gen_planner():
+class gen_planner(NormalVelocityUpdater):
     def __init__(self):
-        self.bridge = CvBridge()
         rospy.init_node('gen_planner', anonymous=True)
 
         arg = rospy.myargv(argv=sys.argv)
@@ -39,10 +60,6 @@ class gen_planner():
         self.scan_angle = np.linspace(0,360,723)
         self.min_angle = 0.0
         self.min_dist = 0.0
-
-        self.obstacles = []  # 장애물 리스트 (x, y, strength)
-        self.obstacle_threshold = 1.0  # 장애물 감지 거리 임계값
-        self.vehicle_status=[0,0,0,0]
         
         path_reader=pathReader('wego') ## 경로 파일의 위치
 
@@ -50,17 +67,23 @@ class gen_planner():
         global_path_pub= rospy.Publisher('/global_path',Path, queue_size=1) ## global_path publisher
         local_path_pub= rospy.Publisher('/local_path',Path, queue_size=1) ## local_path publisher
         ctrl_pub = rospy.Publisher('/ctrl_cmd',CtrlCmd, queue_size=1) ## Vehicl Control
-        odom_pub = rospy.Publisher('odom',Odometry, queue_size=1)
-        # obj_pub = rospy.Publisher('/semantic_obstacle/compressed', CompressedImage, queue_size=1)
         ctrl_msg= CtrlCmd()
+        odom_pub = rospy.Publisher('odom',Odometry, queue_size=1)
         self.status_msg = ego_status()
+        
+
+        ########################  lattice   ########################
+        for i in range(1,8):            
+            globals()['lattice_path_{}_pub'.format(i)]=rospy.Publisher('lattice_path_{}'.format(i),Path,queue_size=1)  
+
+        ########################  lattice   ########################
 
     
         #subscriber
         rospy.Subscriber("/gps", GPSMessage, self.gpsCB)
-        self.image_sub = rospy.Subscriber("/imu", Imu, self.imuCB, queue_size=10)
-        self.ego_sub = rospy.Subscriber("/Ego_topic",EgoVehicleStatus, self.statusCB, queue_size = 10)
-        self.scan_sub = rospy.Subscriber("/scan", LaserScan, self.scanCB, queue_size = 10)
+        self.image_sub = rospy.Subscriber("/imu", Imu, self.imuCB)
+        self.ego_sub = rospy.Subscriber("/Ego_topic",EgoVehicleStatus, self.statusCB)
+        self.scan_sub = rospy.Subscriber("/scan", LaserScan, self.scanCB)
 
         #def
         self.is_status = False
@@ -68,25 +91,15 @@ class gen_planner():
         self.is_imu = False
 
         #class
-        potentialfiled = PotentialField(5,5)
-
+        
+        pure_pursuit=purePursuit() ## purePursuit import
         self.proj_UTM = pyproj.Proj(proj='utm', zone=52, ellps='WGS84', preserve_units=False)
 
         self.global_path = path_reader.read_txt(self.path_name)
 
-        normal_velocity_30 = 30/3.6 # km/h -> m/s
-        vel_planner_30=velocityPlanning(normal_velocity_30,0.15) ## 속도 계획
-        vel_profile_30=vel_planner_30.curveBasedVelocity(self.global_path,100)
-
-        normal_velocity_70 = 70/3.6 # km/h -> m/s
-        vel_planner_70=velocityPlanning(normal_velocity_70,0.15) ## 속도 계획
-        vel_profile_70=vel_planner_70.curveBasedVelocity(self.global_path,100)
-
-        normal_velocity_90 = 90/3.6 # km/h -> m/s
-        vel_planner_90=velocityPlanning(normal_velocity_90,0.15) ## 속도 계획
-        vel_profile_90=vel_planner_90.curveBasedVelocity(self.global_path,100)
-
-        
+        normal_velocity = 80/3.6 # km/h -> m/s
+        vel_planner=velocityPlanning(normal_velocity,0.15) ## 속도 계획
+        vel_profile=vel_planner.curveBasedVelocity(self.global_path,100)
 
         lattice_current_lane=3
 
@@ -96,63 +109,55 @@ class gen_planner():
         rate = rospy.Rate(30) # 30hz
 
         while not rospy.is_shutdown():
-            
             # print(self.is_status , self.is_imu ,self.is_gps)
-            if self.is_status == True and self.is_imu == True and self.is_gps == True and self.is_obj == True:
+            if self.is_status == True and self.is_imu == True and self.is_gps == True:
                 self.getScoutStatus()
-                
                 ## global_path와 차량의 status_msg를 이용해 현제 waypoint와 local_path를 생성
                 local_path,self.current_waypoint=findLocalPath(self.global_path,self.status_msg) 
                 
-                self.vehicle_status=[self.status_msg.position.x,self.status_msg.position.y,(self.status_msg.heading)/180*pi,self.status_msg.velocity.x]
+                ## 장애물의 숫자와 Type 위치 속도 (object_num, object type, object pose_x, object pose_y, object velocity)
 
-                if len(self.global_path.poses) > 0:
-                    # 이 예시에서는 global_path의 첫 번째 waypoint를 선택합니다.
-                    selected_waypoint = self.global_path.poses[self.current_waypoint+1].pose.position
-                    potentialfiled.get_arguments(self.obstacles, (selected_waypoint.x, selected_waypoint.y))
-                    print(f"selected_waypoint : {selected_waypoint}")
-
-                # potentialfiled.get_arguments(self.obstacles, (self.global_path[self.current_waypoint][0], self.global_path[self.current_waypoint][1]))
+                ########################  lattice  ########################
+                vehicle_status=[self.status_msg.position.x,self.status_msg.position.y,(self.status_msg.heading)/180*pi,self.status_msg.velocity.x]
+                lattice_path,selected_lane=latticePlanner(local_path,vehicle_status,lattice_current_lane)
+                lattice_current_lane=selected_lane
+                                
+                if selected_lane != -1: 
+                    local_path=lattice_path[selected_lane]                
                 
-                total_force = potentialfiled.calculate_force((self.vehicle_status[0],self.vehicle_status[1]))
-                target_velocity, desired_steering_angle_degrees = potentialfiled.convert_force_to_controls(total_force)
+                if len(lattice_path)==7:                  
+                    for i in range(1,8):
+                        globals()['lattice_path_{}_pub'.format(i)].publish(lattice_path[i-1])
+                ########################  lattice  ########################
 
-                ctrl_msg.steering = desired_steering_angle_degrees
 
-                # if abs(ctrl_msg.steering) > 4.5:
-                #     target_velocity = vel_profile_30[self.current_waypoint]
+                pure_pursuit.getPath(local_path) ## pure_pursuit 알고리즘에 Local path 적용
+                pure_pursuit.getEgoStatus(self.status_msg) ## pure_pursuit 알고리즘에 차량의 status 적용
+                
+                ##### origin #####
+                ctrl_msg.steering=-pure_pursuit.steering_angle()
+
+                ##### obstacle avoidance but not work #####
+                # if self.min_dist < 10 and (150 < self.min_angle < 210):
+                #     ctrl_msg.steering=-pure_pursuit.steering_angle() + 0.01*(self.min_angle - 180)
                 # else:
-                #     if (0 < self.current_waypoint < 240) or \
-                #     (650 < self.current_waypoint <  778) or \
-                #     (1330 < self.current_waypoint < 1450) or \
-                #     (2056 < self.current_waypoint < 2150) or \
-                #     (2780 < self.current_waypoint < 2921) or \
-                #     (3530 < self.current_waypoint < 3630) or \
-                #     (4200 < self.current_waypoint < 4300) or \
-                #     (5090 < self.current_waypoint < 5160) or \
-                #     (5650 < self.current_waypoint < 5990):
-                #         target_velocity = vel_profile_30[self.current_waypoint]
-                #     elif (778 < self.current_waypoint < 1300) or \
-                #         (2150 < self.current_waypoint < 2700) or \
-                #         (2921 < self.current_waypoint < 3300) or \
-                #         (3800 < self.current_waypoint < 4190) or \
-                #         (5160 < self.current_waypoint < 5600):
-                #             target_velocity = vel_profile_90[self.current_waypoint]
-                #     else:
-                #         target_velocity = vel_profile_70[self.current_waypoint]
-                # if self.velocity > 50 and ctrl_msg.steering > 3.5:
-                #     target_velocity = vel_profile_30[self.current_waypoint]
+                #     ctrl_msg.steering=-pure_pursuit.steering_angle()
+                
 
+                target_velocity = vel_profile[self.current_waypoint]
+                # target_velocity = 100 # cc_vel
+
+                # ctrl_msg.linear.x= max(target_velocity,0)
                 if target_velocity > self.velocity:
                     ctrl_msg.accel = 1
                     ctrl_msg.brake = 0
                 else: # target_velocity <= self.velocity:
                     ctrl_msg.accel = 0
                     ctrl_msg.brake = 0
-                    if self.velocity > target_velocity + 1:
+                    if self.velocity > target_velocity + 5:
                         ctrl_msg.accel = 0
                         ctrl_msg.brake = 1
-                print(ctrl_msg)
+
 
                 local_path_pub.publish(local_path) ## Local Path 출력
                 ctrl_pub.publish(ctrl_msg) ## Vehicl Control 출력
@@ -174,13 +179,12 @@ class gen_planner():
         br.sendTransform((self.status_msg.position.x, self.status_msg.position.y, self.status_msg.position.z),
                         tf.transformations.quaternion_from_euler(0, 0, (self.status_msg.heading)/180*pi),
                         rospy.Time.now(),
-                        "base_link",
-                        "odom")
+                        "gps",
+                        "map")
         self.is_status=True
 
     def statusCB(self, data):
         self.velocity = data.velocity.x
-        self.wheel_angle = data.wheel_angle
         self.is_status = True
 
     def gpsCB(self, data):
@@ -192,24 +196,30 @@ class gen_planner():
         self.is_imu = True
     
     def scanCB(self, data):
-        self.is_obj = True
-        self.obstacles = []
+        # a = []
+        min_dist = 1000
+        min_idx = 0
+        self.scan_ranges = data.ranges
+        a = [round(i,2) for i in self.scan_ranges]
+        
+        for idx,val in enumerate(a): 
+            if min_dist > val:
+                min_dist = val
+                min_idx = idx
+        
+        self.min_angle = round(self.scan_angle[min_idx],2)
+        self.min_dist = min_dist
 
-        for i, distance in enumerate(data.ranges):
-            if distance < data.range_max and distance < self.obstacle_threshold:
-                angle = data.angle_min + i * data.angle_increment
-                x = distance * cos(angle) + self.vehicle_status[0]
-                y = distance * sin(angle) + self.vehicle_status[1]
-                strength = 0.5  # 장애물 감지 강도 (임의로 설정 가능)
+        print(f"min dist : {self.min_dist}, min_angle : {self.min_angle}")
 
-                # 장애물 리스트에 추가
-                self.obstacles.append([x, y])
+        
+
             
 
     def makeOdomMsg(self):
         odom=Odometry()
         odom.header.frame_id='map'
-        odom.child_frame_id='base_link'
+        odom.child_frame_id='gps'
 
         quaternion = tf.transformations.quaternion_from_euler(0, 0, np.deg2rad(self.status_msg.heading))
 
@@ -224,13 +234,14 @@ class gen_planner():
 
         return odom
 
+
     def print_info(self):
 
         os.system('clear')
-        print('--------------------status-------------------------')
-        print('position :{0} ,{1}, {2}'.format(self.status_msg.position.x,self.status_msg.position.y,self.status_msg.position.z))
-        print('velocity :{} km/h'.format(self.velocity))
-        # print('steering :{} deg'.format(ctrl_msg.steering))
+        # print('--------------------status-------------------------')
+        # print('position :{0} ,{1}, {2}'.format(self.status_msg.position.x,self.status_msg.position.y,self.status_msg.position.z))
+        # print('velocity :{} km/h'.format(self.status_msg.velocity.x))
+        # print('heading :{} deg'.format(self.status_msg.heading))
 
         # print('--------------------object-------------------------')
         # print('object num :{}'.format(self.object_num))
@@ -241,9 +252,24 @@ class gen_planner():
         print('all waypoint size: {} '.format(len(self.global_path.poses)))
         print('current waypoint : {} '.format(self.current_waypoint))
 
- 
+
+
+            
+            # time.sleep(self.update_interval)
+
+class CtrlCmdPub(gen_planner, NormalVelocityUpdater):
+    def __init__(self):
+        pass
+    def publisher(self):
+        
 if __name__ == '__main__':
     try:
-        kcity_pathtracking=gen_planner()
+        # Planner 객체 생성
+        kcity_pathtracking = gen_planner()
+
+        # NormalVelocityUpdater 시작
+        velocity_updater = NormalVelocityUpdater(kcity_pathtracking)
+        velocity_updater.start()
+
     except rospy.ROSInterruptException:
         pass

@@ -17,6 +17,7 @@
         <rosparam>
             target_frame: lidar3D # Leave disabled to output scan in pointcloud frame
             transform_tolerance: 0.01
+<<<<<<< HEAD
             min_height: -1.5
             max_height: 1.0
 
@@ -25,6 +26,16 @@
             angle_increment: 0.0087 # M_PI/360.0
             scan_time: 0.0666667 # 15Hz
             range_min: 0.1
+=======
+            min_height: -2.5
+            max_height: 0.0
+
+            angle_min: -0.3 #-3.141592 # -M_PI/2
+            angle_max: 0.3 #3.14/6 #3.141592 # M_PI/2
+            angle_increment: 0.0087 # M_PI/360.0
+            scan_time: 0.0666667 # 15Hz
+            range_min: 0.45
+>>>>>>> 777ff327b399e80b60e4b0ca90e276c0688c9a5e
             range_max: 200
             use_inf: true
             inf_epsilon: 1.0
