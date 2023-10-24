@@ -301,7 +301,7 @@ def latticePlanner(ref_path,global_vaild_object,vehicle_status,current_lane):
         local_end_point=det_t.dot(world_end_point)
         world_ego_vehicle_position=np.array([[vehicle_status[0]],[vehicle_status[1]],[1]])
         local_ego_vehicle_position=det_t.dot(world_ego_vehicle_position)
-        lane_off_set=[4.2,3.5,2.8,0,-2.8,-3.5,-4.2]
+        lane_off_set=[3.4,2.3,1.2,0,-1.2,-2.3,-3.4]
         local_lattice_points=[]
         for i in range(len(lane_off_set)):
             local_lattice_points.append([local_end_point[0][0],local_end_point[1][0]+lane_off_set[i],1])
@@ -402,7 +402,7 @@ def latticePlanner(ref_path,global_vaild_object,vehicle_status,current_lane):
                                 
                             #     break
 
-                            if dis<10 + 20*(vehicle_status[3]/30):
+                            if dis<30: # + 20*(vehicle_status[3]/30):
                                 # 30km/h -> 20, 60km/h -> 40 90km/h -> 60
                                 # print("obj detected")
                                 collision_bool[path_num]=True

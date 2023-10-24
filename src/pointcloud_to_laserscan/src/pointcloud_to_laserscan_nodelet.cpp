@@ -196,16 +196,10 @@ void PointCloudToLaserScanNodelet::cloudCb(const sensor_msgs::PointCloud2ConstPt
   }
 
   // Iterate through pointcloud
-  // for (sensor_msgs::PointCloud2ConstIterator<float> iter_x(*cloud_out, "x"), iter_y(*cloud_out, "y"),
-  for (size_t i = 0; i < cloud_out->data.size(); i += cloud_out->point_step)
-      //  iter_z(*cloud_out, "z");
-      //  iter_x != iter_x.end(); ++iter_x, ++iter_y, ++iter_z)
+  for (sensor_msgs::PointCloud2ConstIterator<float> iter_x(*cloud_out, "x"), iter_y(*cloud_out, "y"),
+       iter_z(*cloud_out, "z");
+       iter_x != iter_x.end(); ++iter_x, ++iter_y, ++iter_z)
   {
-    float x, y, z;
-    memcpy(&x, &cloud_out->data[i + cloud_out->fields[x_field].offset], sizeof(float));
-    memcpy(&y, &cloud_out->data[i + cloud_out->fields[y_field].offset], sizeof(float));
-    memcpy(&z, &cloud_out->data[i + cloud_out->fields[z_field].offset], sizeof(float));
-
     if (std::isnan(*iter_x) || std::isnan(*iter_y) || std::isnan(*iter_z))
     {
       NODELET_DEBUG("rejected for nan in point(%f, %f, %f)\n", *iter_x, *iter_y, *iter_z);

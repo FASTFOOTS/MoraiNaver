@@ -91,9 +91,9 @@ class gen_planner():
         vel_planner_10=velocityPlanning(normal_velocity_10,0.15) ## 속도 계획
         vel_profile_10=vel_planner_10.curveBasedVelocity(self.global_path,100)
 
-        normal_velocity_70 = 70/3.6 # km/h -> m/s
-        vel_planner_70=velocityPlanning(normal_velocity_70,0.15) ## 속도 계획
-        vel_profile_70=vel_planner_70.curveBasedVelocity(self.global_path,100)
+        normal_velocity_50 = 50/3.6 # km/h -> m/s
+        vel_planner_50=velocityPlanning(normal_velocity_50,0.15) ## 속도 계획
+        vel_profile_50=vel_planner_50.curveBasedVelocity(self.global_path,100)
 
         normal_velocity_90 = 90/3.6 # km/h -> m/s
         vel_planner_90=velocityPlanning(normal_velocity_90,0.15) ## 속도 계획
@@ -146,7 +146,7 @@ class gen_planner():
                 
                 if abs(self.wheel_angle) > 4.5:
                     if abs(self.wheel_angle) > 8.0:
-                        target_velocity = vel_profile_10[self.current_waypoint]
+                        target_velocity = vel_profile_30[self.current_waypoint]
                     else:
                         target_velocity = vel_profile_30[self.current_waypoint]
                 else:
@@ -163,21 +163,21 @@ class gen_planner():
                         (4200 < self.current_waypoint < 4300) or \
                         (5090 < self.current_waypoint < 5160) or \
                         (5650 < self.current_waypoint < 5990):
-                            target_velocity = vel_profile_70[self.current_waypoint]
+                            target_velocity = vel_profile_50[self.current_waypoint]
                         elif (778 < self.current_waypoint < 1300) or \
                             (2150 < self.current_waypoint < 2700) or \
                             (2921 < self.current_waypoint < 3300) or \
                             (3800 < self.current_waypoint < 4190) or \
                             (5160 < self.current_waypoint < 5600):
-                                target_velocity = vel_profile_90[self.current_waypoint]
+                                target_velocity = vel_profile_50[self.current_waypoint]
                         else:
-                            target_velocity = vel_profile_70[self.current_waypoint]
+                            target_velocity = vel_profile_50[self.current_waypoint]
                     
                     if abs(ctrl_msg.steering) > 4.5:
                         target_velocity = vel_profile_30[self.current_waypoint]
 
                     if abs(ctrl_msg.steering) > 8.0:
-                        target_velocity = vel_profile_10[self.current_waypoint]
+                        target_velocity = vel_profile_30[self.current_waypoint]
                         
                 print(f"target_velocity : {round(target_velocity * 3.6, 0)}")
 
@@ -187,7 +187,7 @@ class gen_planner():
                 # target_velocity = vel_profile[self.current_waypoint]
 
                 # speed control method
-                if target_velocity > self.velocity:
+                if target_velocity - 0.5 > self.velocity:
                     ctrl_msg.accel = 1
                     ctrl_msg.brake = 0
                 else: # target_velocity <= self.velocity:
@@ -248,14 +248,16 @@ class gen_planner():
         min_idx = 0
         scan_ranges = [round(data,1) for data in data.ranges]
 
-        for idx, val in enumerate(scan_ranges): 
-            if min_dist > val:
-                min_dist = val
-                min_idx = idx
-
         angle_min = data.angle_min  # 첫 번째 스캔 데이터의 각도
         angle_increment = data.angle_increment  # 각 스캔 데이터 사이의 각도 간격
         min_angle = round(angle_min + min_idx * angle_increment,2)  # 최소 거리를 갖는 스캔 데이터의 각도
+
+        for idx, val in enumerate(scan_ranges): 
+            if min_dist > val and abs(min_angle) < 0.5:
+                min_dist = val
+                min_idx = idx
+
+        
 
         min_dist_x = round(min_dist * cos(min_angle),2)  # x 좌표 계산
         min_dist_y = round(min_dist * sin(min_angle),2)  # y 좌표 계산
@@ -263,7 +265,7 @@ class gen_planner():
 
         if abs(min_dist_y) < 2.8:#min_dist_x < 15 and abs(min_dist_y) < 2.5:
             # self.object_info_msg=[[1,min_dist_x + self.status_msg.position.x,min_dist_y + self.status_msg.position.y,0]]/
-            self.object_info_msg=[[1,min_dist_x, min_dist_y,0]]
+            self.object_info_msg=[[1,min_dist_x+5, min_dist_y,0]]
             self.object_num = 1
             self.obstacle_detected = True
             # print(f"obj x,y : ({min_dist_x},{min_dist_y})")
@@ -297,7 +299,7 @@ class gen_planner():
         bottom_half_y = bin_img.shape[0] * 2 / 3
         histogram = np.sum(bin_img[int(bottom_half_y) :, :], axis=0)
         histogram[histogram < 25] = 0
-        print(f"histogram : {histogram}")
+        # print(f"histogram : {histogram}")
 
         obj_base = np.argmax(histogram)
         print(f"obj_base : {obj_base}")
