@@ -36,6 +36,10 @@ class gen_planner():
         self.scan_angle = np.linspace(0,360,723)
         self.min_angle = 0.0
         self.min_dist = 0.0
+
+        self.obstacles = []  # 장애물 리스트 (x, y, strength)
+        self.obstacle_threshold = 1.0  # 장애물 감지 거리 임계값
+        self.vehicle_status=[0,0,0,0]
         
         path_reader=pathReader('wego') ## 경로 파일의 위치
 
@@ -46,20 +50,13 @@ class gen_planner():
         ctrl_msg= CtrlCmd()
         odom_pub = rospy.Publisher('odom',Odometry, queue_size=1)
         self.status_msg = ego_status()
-        
-
-        ########################  lattice   ########################
-        for i in range(1,8):            
-            globals()['lattice_path_{}_pub'.format(i)]=rospy.Publisher('lattice_path_{}'.format(i),Path,queue_size=1)  
-
-        ########################  lattice   ########################
 
     
         #subscriber
         rospy.Subscriber("/gps", GPSMessage, self.gpsCB)
-        self.image_sub = rospy.Subscriber("/imu", Imu, self.imuCB)
-        self.ego_sub = rospy.Subscriber("/Ego_topic",EgoVehicleStatus, self.statusCB)
-        self.scan_sub = rospy.Subscriber("/scan", LaserScan, self.scanCB)
+        self.image_sub = rospy.Subscriber("/imu", Imu, self.imuCB, queue_size=10)
+        self.ego_sub = rospy.Subscriber("/Ego_topic",EgoVehicleStatus, self.statusCB, queue_size = 10)
+        self.scan_sub = rospy.Subscriber("/scan", LaserScan, self.scanCB, queue_size = 10)
 
         #def
         self.is_status = False
@@ -67,15 +64,25 @@ class gen_planner():
         self.is_imu = False
 
         #class
-        
-        pure_pursuit=purePursuit() ## purePursuit import
+        potentialfiled = PotentialField(5,5)
+
         self.proj_UTM = pyproj.Proj(proj='utm', zone=52, ellps='WGS84', preserve_units=False)
 
         self.global_path = path_reader.read_txt(self.path_name)
 
-        normal_velocity = 80/3.6 # km/h -> m/s
-        vel_planner=velocityPlanning(normal_velocity,0.15) ## 속도 계획
-        vel_profile=vel_planner.curveBasedVelocity(self.global_path,100)
+        normal_velocity_30 = 30/3.6 # km/h -> m/s
+        vel_planner_30=velocityPlanning(normal_velocity_30,0.15) ## 속도 계획
+        vel_profile_30=vel_planner_30.curveBasedVelocity(self.global_path,100)
+
+        normal_velocity_70 = 70/3.6 # km/h -> m/s
+        vel_planner_70=velocityPlanning(normal_velocity_70,0.15) ## 속도 계획
+        vel_profile_70=vel_planner_70.curveBasedVelocity(self.global_path,100)
+
+        normal_velocity_90 = 90/3.6 # km/h -> m/s
+        vel_planner_90=velocityPlanning(normal_velocity_90,0.15) ## 속도 계획
+        vel_profile_90=vel_planner_90.curveBasedVelocity(self.global_path,100)
+
+        
 
         lattice_current_lane=3
 
@@ -85,38 +92,52 @@ class gen_planner():
         rate = rospy.Rate(30) # 30hz
 
         while not rospy.is_shutdown():
+            
             # print(self.is_status , self.is_imu ,self.is_gps)
             if self.is_status == True and self.is_imu == True and self.is_gps == True and self.is_obj == True:
                 self.getScoutStatus()
+                
                 ## global_path와 차량의 status_msg를 이용해 현제 waypoint와 local_path를 생성
                 local_path,self.current_waypoint=findLocalPath(self.global_path,self.status_msg) 
                 
-                ## 장애물의 숫자와 Type 위치 속도 (object_num, object type, object pose_x, object pose_y, object velocity)
-                # self.vo.get_object(self.object_num,self.object_info_msg[0],self.object_info_msg[1],self.object_info_msg[2],self.object_info_msg[3])
-                # global_obj,local_obj=self.vo.calc_vaild_obj([self.status_msg.position.x,self.status_msg.position.y,(self.status_msg.heading)/180*pi])
+                self.vehicle_status=[self.status_msg.position.x,self.status_msg.position.y,(self.status_msg.heading)/180*pi,self.status_msg.velocity.x]
 
-                ########################  lattice  ########################
-                vehicle_status=[self.status_msg.position.x,self.status_msg.position.y,(self.status_msg.heading)/180*pi,self.status_msg.velocity.x]
-                lattice_path,selected_lane=latticePlanner(local_path,self.object_info_msg,vehicle_status,lattice_current_lane)
-                lattice_current_lane=selected_lane
-                # print(f"lattice_current_lane : {lattice_current_lane}")
-                # print(f"selected_lane : {selected_lane}")
-                                
-                if selected_lane != -1: 
-                    local_path=lattice_path[selected_lane]                
+                if len(self.global_path.poses) > 0:
+                    # 이 예시에서는 global_path의 첫 번째 waypoint를 선택합니다.
+                    selected_waypoint = self.global_path.poses[self.current_waypoint+1].pose.position
+                    potentialfiled.get_arguments(self.obstacles, (selected_waypoint.x, selected_waypoint.y))
+                    print(f"selected_waypoint : {selected_waypoint}")
+
+                # potentialfiled.get_arguments(self.obstacles, (self.global_path[self.current_waypoint][0], self.global_path[self.current_waypoint][1]))
                 
-                if len(lattice_path)==7:                  
-                    for i in range(1,8):
-                        globals()['lattice_path_{}_pub'.format(i)].publish(lattice_path[i-1])
-                ########################  lattice  ########################
+                total_force = potentialfiled.calculate_force((self.vehicle_status[0],self.vehicle_status[1]))
+                target_velocity, desired_steering_angle_degrees = potentialfiled.convert_force_to_controls(total_force)
 
+                ctrl_msg.steering = desired_steering_angle_degrees
 
-                pure_pursuit.getPath(local_path) ## pure_pursuit 알고리즘에 Local path 적용
-                pure_pursuit.getEgoStatus(self.status_msg) ## pure_pursuit 알고리즘에 차량의 status 적용
-                
-                ctrl_msg.steering=-pure_pursuit.steering_angle()
-
-                target_velocity = vel_profile[self.current_waypoint]
+                # if abs(ctrl_msg.steering) > 4.5:
+                #     target_velocity = vel_profile_30[self.current_waypoint]
+                # else:
+                #     if (0 < self.current_waypoint < 240) or \
+                #     (650 < self.current_waypoint <  778) or \
+                #     (1330 < self.current_waypoint < 1450) or \
+                #     (2056 < self.current_waypoint < 2150) or \
+                #     (2780 < self.current_waypoint < 2921) or \
+                #     (3530 < self.current_waypoint < 3630) or \
+                #     (4200 < self.current_waypoint < 4300) or \
+                #     (5090 < self.current_waypoint < 5160) or \
+                #     (5650 < self.current_waypoint < 5990):
+                #         target_velocity = vel_profile_30[self.current_waypoint]
+                #     elif (778 < self.current_waypoint < 1300) or \
+                #         (2150 < self.current_waypoint < 2700) or \
+                #         (2921 < self.current_waypoint < 3300) or \
+                #         (3800 < self.current_waypoint < 4190) or \
+                #         (5160 < self.current_waypoint < 5600):
+                #             target_velocity = vel_profile_90[self.current_waypoint]
+                #     else:
+                #         target_velocity = vel_profile_70[self.current_waypoint]
+                # if self.velocity > 50 and ctrl_msg.steering > 3.5:
+                #     target_velocity = vel_profile_30[self.current_waypoint]
 
                 if target_velocity > self.velocity:
                     ctrl_msg.accel = 1
@@ -124,10 +145,10 @@ class gen_planner():
                 else: # target_velocity <= self.velocity:
                     ctrl_msg.accel = 0
                     ctrl_msg.brake = 0
-                    if self.velocity > target_velocity + 5:
+                    if self.velocity > target_velocity + 1:
                         ctrl_msg.accel = 0
                         ctrl_msg.brake = 1
-
+                print(ctrl_msg)
 
                 local_path_pub.publish(local_path) ## Local Path 출력
                 ctrl_pub.publish(ctrl_msg) ## Vehicl Control 출력
@@ -165,37 +186,19 @@ class gen_planner():
         self.euler_data = tf.transformations.euler_from_quaternion((data.orientation.x, data.orientation.y, data.orientation.z, data.orientation.w))
         self.is_imu = True
     
-
-
     def scanCB(self, data):
-        min_dist = 1000
-        min_idx = 0
-        scan_ranges = [round(data,1) for data in data.ranges]
+        self.is_obj = True
+        self.obstacles = []
 
-        for idx, val in enumerate(scan_ranges): 
-            if min_dist > val:
-                min_dist = val
-                min_idx = idx
+        for i, distance in enumerate(data.ranges):
+            if distance < data.range_max and distance < self.obstacle_threshold:
+                angle = data.angle_min + i * data.angle_increment
+                x = distance * cos(angle) + self.vehicle_status[0]
+                y = distance * sin(angle) + self.vehicle_status[1]
+                strength = 0.5  # 장애물 감지 강도 (임의로 설정 가능)
 
-        angle_min = data.angle_min  # 첫 번째 스캔 데이터의 각도
-        angle_increment = data.angle_increment  # 각 스캔 데이터 사이의 각도 간격
-        min_angle = round(angle_min + min_idx * angle_increment,2)  # 최소 거리를 갖는 스캔 데이터의 각도
-
-        min_dist_x = round(min_dist * cos(min_angle),2)  # x 좌표 계산
-        min_dist_y = round(min_dist * sin(min_angle),2)  # y 좌표 계산
-        print(f"obj x,y : ({min_dist_x},{min_dist_y})")
-
-        if min_dist_x < 15 and abs(min_dist_y) < 2.5:
-            self.object_info_msg=[[1,min_dist_x,min_dist_y,0]]
-            self.object_num = 1
-        else:
-            self.object_info_msg=[[1,1000,1000,0]]
-            self.object_num = 0
-
-        self.is_obj=True
-
-            
-
+                # 장애물 리스트에 추가
+                self.obstacles.append([x, y])
             
 
     def makeOdomMsg(self):
@@ -220,10 +223,10 @@ class gen_planner():
     def print_info(self):
 
         os.system('clear')
-        # print('--------------------status-------------------------')
-        # print('position :{0} ,{1}, {2}'.format(self.status_msg.position.x,self.status_msg.position.y,self.status_msg.position.z))
-        # print('velocity :{} km/h'.format(self.status_msg.velocity.x))
-        # print('heading :{} deg'.format(self.status_msg.heading))
+        print('--------------------status-------------------------')
+        print('position :{0} ,{1}, {2}'.format(self.status_msg.position.x,self.status_msg.position.y,self.status_msg.position.z))
+        print('velocity :{} km/h'.format(self.velocity))
+        # print('steering :{} deg'.format(ctrl_msg.steering))
 
         # print('--------------------object-------------------------')
         # print('object num :{}'.format(self.object_num))

@@ -17,14 +17,14 @@
         <rosparam>
             target_frame: lidar3D # Leave disabled to output scan in pointcloud frame
             transform_tolerance: 0.01
-            min_height: -2.8
-            max_height: -1.0
+            min_height: -1.5
+            max_height: 1.0
 
-            angle_min: -0.3 #-3.141592 # -M_PI/2
-            angle_max: 0.3 #3.14/6 #3.141592 # M_PI/2
+            angle_min: -1.5 #-3.141592 # -M_PI/2
+            angle_max: 1.5 #3.14/6 #3.141592 # M_PI/2
             angle_increment: 0.0087 # M_PI/360.0
             scan_time: 0.0666667 # 15Hz
-            range_min: 0.45
+            range_min: 0.1
             range_max: 200
             use_inf: true
             inf_epsilon: 1.0
@@ -37,5 +37,14 @@
         </rosparam>
 
     </node>
+    
+    <node pkg="tf2_ros" type="static_transform_publisher" name="map_to_odom" args="1.5 0 1.25 0 0 0 1 map odom" />
+    <node pkg="tf2_ros" type="static_transform_publisher" name="base_link_to_scan" args="1.5 0 1.25 0 0 0 1 base_link scan" />
+    <node pkg="tf2_ros" type="static_transform_publisher" name="base_link_to_lidar" args="1.5 0 1.25 0 0 0 1 base_link lidar3D" />
+    <node pkg="tf2_ros" type="static_transform_publisher" name="base_link_to_imu" args="0 0 0 0 0 0 1 base_link imu" />
+    <node pkg="tf2_ros" type="static_transform_publisher" name="base_link_to_gps" args="0 0 0 0 0 0 1 base_link gps" />
+
+    <node pkg="wego" type="planner.py" name="planner" args="naver_sim.txt 314494.0581980597 4160624.929391573" output="screen" />
+    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find wego)/rviz/planner.rviz" />
 
 </launch>
