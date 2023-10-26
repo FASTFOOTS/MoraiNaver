@@ -1,4 +1,5 @@
 build
 devel
 src_2
+.gitignore
 .catkin_workspace
