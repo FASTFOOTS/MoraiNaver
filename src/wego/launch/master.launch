@@ -9,7 +9,7 @@
     </include> -->
 
     <!-- run pointcloud_to_laserscan node -->
-    <node pkg="pointcloud_to_laserscan" type="pointcloud_to_laserscan_node" name="pointcloud_to_laserscan">
+    <!-- <node pkg="pointcloud_to_laserscan" type="pointcloud_to_laserscan_node" name="pointcloud_to_laserscan">
 
         <remap from="cloud_in" to="lidar3D"/>
         <remap from="scan" to="scan"/>
@@ -35,11 +35,12 @@
             concurrency_level: 1
         </rosparam>
 
-    </node>
+    </node> -->
     
     <node pkg="tf2_ros" type="static_transform_publisher" name="map_to_odom" args="1.5 0 1.25 0 0 0 1 map odom" />
-    <node pkg="tf2_ros" type="static_transform_publisher" name="base_link_to_scan" args="1.5 0 1.25 0 0 0 1 base_link scan" />
-    <node pkg="tf2_ros" type="static_transform_publisher" name="base_link_to_lidar" args="1.5 0 1.25 0 0 0 1 base_link lidar3D" />
+    <node pkg="tf2_ros" type="static_transform_publisher" name="odom_to_base_link" args="1.5 0 1.25 0 0 0 1 odom base_link" />
+    <!-- <node pkg="tf2_ros" type="static_transform_publisher" name="base_link_to_scan" args="1.5 0 1.25 0 0 0 1 base_link scan" /> -->
+    <!-- <node pkg="tf2_ros" type="static_transform_publisher" name="base_link_to_lidar" args="1.5 0 1.25 0 0 0 1 base_link lidar3D" /> -->
     <node pkg="tf2_ros" type="static_transform_publisher" name="base_link_to_imu" args="0 0 0 0 0 0 1 base_link imu" />
     <node pkg="tf2_ros" type="static_transform_publisher" name="base_link_to_gps" args="0 0 0 0 0 0 1 base_link gps" />
 
