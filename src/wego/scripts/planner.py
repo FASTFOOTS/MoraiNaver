@@ -60,7 +60,7 @@ class gen_planner():
         
 
         ########################  lattice   ########################
-        for i in range(1,8):            
+        for i in range(1,22):            
             globals()['lattice_path_{}_pub'.format(i)]=rospy.Publisher('lattice_path_{}'.format(i),Path,queue_size=1)  
 
         ########################  lattice   ########################
@@ -117,7 +117,7 @@ class gen_planner():
     
         #time var
         count=0
-        rate = rospy.Rate(30) # 30hz
+        rate = rospy.Rate(10) # 30hz
 
         while not rospy.is_shutdown():
             # print(self.is_status , self.is_imu ,self.is_gps)
@@ -132,7 +132,7 @@ class gen_planner():
 
                 ########################  lattice  ########################
                 vehicle_status=[self.status_msg.position.x,self.status_msg.position.y,(self.status_msg.heading)/180*pi,self.status_msg.velocity.x]
-                print(f"obj : {self.object_info_msg}")
+                # print(f"obj : {self.object_info_msg}")
                 lattice_path,selected_lane=latticePlanner(local_path,self.object_info_msg,vehicle_status,lattice_current_lane)
                 lattice_current_lane=selected_lane
                 # print(f"lattice_current_lane : {lattice_current_lane}")
@@ -141,8 +141,8 @@ class gen_planner():
                 if selected_lane != -1: 
                     local_path=lattice_path[selected_lane]                
                 
-                if len(lattice_path)==7:                  
-                    for i in range(1,8):
+                if len(lattice_path)==21:                  
+                    for i in range(1,22):
                         globals()['lattice_path_{}_pub'.format(i)].publish(lattice_path[i-1])
                 ########################  lattice  ########################
 
@@ -270,6 +270,7 @@ class gen_planner():
         filtered_y2 = []
         index_list = []
         index_list2 = []
+        list1 = []
         scan_ranges = [round(data,1) for data in data.ranges]
 
         angle_min = data.angle_min  # 첫 번째 스캔 데이터의 각도
@@ -288,60 +289,31 @@ class gen_planner():
                 y.append(y_val)
         
         for index, data in enumerate(y):
-            if abs(data) < 0.9:
+            if abs(data) < 2.5:
                 filtered_y.append(data)
                 index_list.append(index)
         for i in index_list:
             filtered_x.append(x[i])
 
         for index, data in enumerate(filtered_x):
-            if data > 1:
+            if 1 < data < 10:
                 filtered_x2.append(data)
                 index_list2.append(index)
         for i in index_list2:
             filtered_y2.append(filtered_y[i])
+        
+        self.object_info_msg=[[1,1000,1000,0]]
+        self.obstacle_detected = False
 
-
-        if len(filtered_x2) > 0:
-            min_distance = float("inf")
-            min_index = 0
-
+        if not (5681 < self.current_waypoint < 5915):
+            # self.object_info_msg=[[1,min_dist_x + self.status_msg.position.x,min_dist_y + self.status_msg.position.y,0]]/
+            # self.object_info_msg = [1,closest_x, closest_y,0]
             for i in range(len(filtered_x2)):
-                distance = sqrt(filtered_x2[i]**2 + filtered_y2[i]**2)
-                if distance < min_distance:
-                    min_distance = distance
-                    min_index = i
-
-            # Now, min_distance contains the minimum distance, and min_index is the index of the closest point
-            closest_x = filtered_x2[min_index]
-            closest_y = filtered_y2[min_index]
-            # print(f"closest_point : ({closest_x},{closest_y})")
-        else:
-            # Handle the case where there are no points in the filtered lists
-            closest_x = 1000
-            closest_y = 1000
-            min_distance = float("inf")
-        
+                list1.append([1, filtered_x2[i], filtered_y2[i], 0])
+            self.object_info_msg = list1
 
 
-
-        # min_angle = round(angle_min + min_idx * angle_increment,2)  # 최소 거리를 갖는 스캔 데이터의 각도
-
-        # min_dist_x = round(min_dist * cos(min_angle),2)  # x 좌표 계산
-        # min_dist_y = round(min_dist * sin(min_angle),2)  # y 좌표 계산
-        
-
-        if abs(min_distance) < 30:#min_dist_x < 15 and abs(min_dist_y) < 2.5:
-            if not (5681 < self.current_waypoint < 5915):
-                self.object_info_msg=[[1,min_dist_x + self.status_msg.position.x,min_dist_y + self.status_msg.position.y,0]]/
-                self.object_info_msg.append([1,closest_x, closest_y,0])
-                self.object_num = 1
-                self.obstacle_detected = True
-                # print(f"obj x,y : ({min_dist_x},{min_dist_y})")
-        else:
-            # self.object_info_msg=[[1,1000,1000,0]]
-            # self.object_num = 0
-            self.obstacle_detected = False
+            self.obstacle_detected = True
 
         self.is_obj=True
 
@@ -390,7 +362,7 @@ class gen_planner():
             print("noting detected by semantic camera")
 
     def timerCB(self, event):
-        del self.object_info_msg[:1]
+        pass
 
     def makeOdomMsg(self):
         odom=Odometry()

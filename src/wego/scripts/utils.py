@@ -41,8 +41,6 @@ class pathReader :
         return out_path
       
 
-
-
 def findLocalPath(ref_path,status_msg):
     out_path=Path()
     current_x=status_msg.position.x
@@ -120,7 +118,6 @@ class velocityPlanning :
         out_vel_plan = [round(data,1) for data in out_vel_plan]
         
         return out_vel_plan
-
 
 class purePursuit :
     def __init__(self):
@@ -205,9 +202,6 @@ class purePursuit :
         else:
             # print("no found forward point")
             return 0
-
-
-        
 
 class mgko_obj :
     def __init__(self):
@@ -301,7 +295,7 @@ def latticePlanner(ref_path,global_vaild_object,vehicle_status,current_lane):
         local_end_point=det_t.dot(world_end_point)
         world_ego_vehicle_position=np.array([[vehicle_status[0]],[vehicle_status[1]],[1]])
         local_ego_vehicle_position=det_t.dot(world_ego_vehicle_position)
-        lane_off_set=[2.5,1.6,0.8,0,-0.8,-1.6,-2.5]
+        lane_off_set=[-0.5*i for i in range(-10,11)]
         local_lattice_points=[]
         for i in range(len(lane_off_set)):
             local_lattice_points.append([local_end_point[0][0],local_end_point[1][0]+lane_off_set[i],1])
@@ -382,46 +376,19 @@ def latticePlanner(ref_path,global_vaild_object,vehicle_status,current_lane):
                     read_pose.pose.orientation.w=1
                     out_path[lane_num].poses.append(read_pose)
 
-        lane_weight=[6,4,2,0,2,4,6] #reference path 
-        collision_bool=[False,False,False,False,False,False,False]
+        lane_weight=[abs(i*2) for i in range(-10,11)] #reference path 
+        collision_bool=[False] * 21
 
         if len(global_vaild_object)>0:
-
             for obj in global_vaild_object :
-                if  obj[0]==2 or obj[0]==1 : 
-                    for path_num in range(len(out_path)) :
+                for index, data in enumerate(lane_off_set):
+                    if data - 1.<obj[2]<data + 1.:
+                        lane_weight[index]=lane_weight[index]+100
+        
 
-                        for path_pos in out_path[path_num].poses :
-                            
-                            dis= sqrt(pow(obj[1],2)+pow(obj[2],2))
-                            # dis= sqrt(pow(obj[1]-path_pos.pose.position.x,2)+pow(obj[2]-path_pos.pose.position.y,2))
-                            
-                            # if dis<3:
-                            #     collision_bool[path_num]=True
-                            #     lane_weight[path_num]=lane_weight[path_num]+100
-                                
-                            #     break
-
-                            if dis<30:#10 + 20*(vehicle_status[3]/30):
-                                # 30km/h -> 20, 60km/h -> 40 90km/h -> 60
-                                # print("obj detected")
-                                collision_bool[path_num]=True
-                                # lane_weight[path_num]=lane_weight[path_num]+100
-                                lane_weight[1]=lane_weight[1]+100
-                                lane_weight[2]=lane_weight[2]+100
-                                lane_weight[3]=lane_weight[3]+100
-                                lane_weight[4]=lane_weight[4]+100
-                                lane_weight[5]=lane_weight[5]+100
-                                if obj[2] >= -1:
-                                    lane_weight[0]=lane_weight[0]+1
-                                else:
-                                    lane_weight[6]=lane_weight[6]+1
-                                break
-            # print(lane_weight)
-            # print(dis)
         else :
             print("No Obstacle")
-        # print(f"lane_weight : {lane_weight}")
+        print(f"lane_weight : {lane_weight}")
         selected_lane=lane_weight.index(min(lane_weight))
         # print(lane_weight,selected_lane)
         all_lane_collision=True
