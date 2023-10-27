@@ -225,7 +225,7 @@ class gen_planner():
                 local_path_pub.publish(local_path) ## Local Path 출력
                 ctrl_pub.publish(ctrl_msg) ## Vehicl Control 출력
                 odom_pub.publish(self.makeOdomMsg())
-                # self.print_info()
+                self.print_info()
             
                 if count==30 : ## global path 출력
                     global_path_pub.publish(self.global_path)
@@ -304,8 +304,8 @@ class gen_planner():
         
         self.object_info_msg=[[1,1000,1000,0]]
         self.obstacle_detected = False
-
-        if not (5681 < self.current_waypoint < 5915):
+        
+        if not ((5681 < self.current_waypoint < 5915) and (1400 < self.current_waypoint < 2150) and (4257 < self.current_waypoint < 5200)):
             # self.object_info_msg=[[1,min_dist_x + self.status_msg.position.x,min_dist_y + self.status_msg.position.y,0]]/
             # self.object_info_msg = [1,closest_x, closest_y,0]
             for i in range(len(filtered_x2)):
@@ -384,7 +384,7 @@ class gen_planner():
 
     def print_info(self):
 
-        # os.system('clear')
+        os.system('clear')
         # print('--------------------status-------------------------')
         # print('position :{0} ,{1}, {2}'.format(self.status_msg.position.x,self.status_msg.position.y,self.status_msg.position.z))
         # print('velocity :{} km/h'.format(self.status_msg.velocity.x))

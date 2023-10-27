@@ -382,13 +382,14 @@ def latticePlanner(ref_path,global_vaild_object,vehicle_status,current_lane):
         if len(global_vaild_object)>0:
             for obj in global_vaild_object :
                 for index, data in enumerate(lane_off_set):
-                    if data - 1.<obj[2]<data + 1.:
+                    if data - 2.<obj[2]<data + 2.:
                         lane_weight[index]=lane_weight[index]+100
         
 
         else :
-            print("No Obstacle")
-        print(f"lane_weight : {lane_weight}")
+            pass
+            # print("No Obstacle")/
+        # print(f"lane_weight : {lane/_weight}")
         selected_lane=lane_weight.index(min(lane_weight))
         # print(lane_weight,selected_lane)
         all_lane_collision=True
