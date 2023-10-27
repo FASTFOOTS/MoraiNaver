@@ -39,10 +39,14 @@ class gen_planner():
         self.min_angle = 0.0
         self.min_dist = 0.0
 
+        self.steering = 0
+        self.steering_angle = [0,0]
+
         self.object_info_msg=[[1,1000,1000,0]]
         self.obstacle_detected = False
 
         self.current_waypoint = 0
+        
 
         abs_flag = True
         
@@ -71,8 +75,7 @@ class gen_planner():
         self.imu_sub = rospy.Subscriber("/imu", Imu, self.imuCB, queue_size=1)
         self.ego_sub = rospy.Subscriber("/Ego_topic",EgoVehicleStatus, self.statusCB, queue_size = 1)
         self.scan_sub = rospy.Subscriber("/scan", LaserScan, self.scanCB, queue_size = 1)
-        self.image_sub = rospy.Subscriber("/segmantic_image_jpeg/compressed", CompressedImage, self.img_CB)
-        self.object_info_timer = rospy.Timer(rospy.Duration(0.15), self.timerCB)
+
 
         #def
         self.is_status = False
@@ -109,6 +112,7 @@ class gen_planner():
         normal_velocity_100 = 100/3.6 # km/h -> m/s
         vel_planner_100=velocityPlanning(normal_velocity_100,0.15) ## 속도 계획
         vel_profile_100=vel_planner_100.curveBasedVelocity(self.global_path,100)
+        
 
         
 
@@ -149,8 +153,10 @@ class gen_planner():
 
                 pure_pursuit.getPath(local_path) ## pure_pursuit 알고리즘에 Local path 적용
                 pure_pursuit.getEgoStatus(self.status_msg) ## pure_pursuit 알고리즘에 차량의 status 적용
-                
-                ctrl_msg.steering=-pure_pursuit.steering_angle()
+                if self.obstacle_detected:
+                    ctrl_msg.steering=self.steering
+                else:
+                    ctrl_msg.steering=-pure_pursuit.steering_angle()
                 
                 if abs(self.wheel_angle) > 4.5:
                     if abs(self.wheel_angle) > 8.0:
@@ -158,10 +164,9 @@ class gen_planner():
                     else:
                         target_velocity = vel_profile_50[self.current_waypoint]
                 else:
+                    target_velocity = vel_profile_50[self.current_waypoint]
                     if self.obstacle_detected:
                         target_velocity = vel_profile_70[self.current_waypoint]
-# 1350 2220
-# 4600 5525
                     
                     if abs(ctrl_msg.steering) > 4.5:
                         target_velocity = vel_profile_50[self.current_waypoint]
@@ -169,21 +174,12 @@ class gen_planner():
                     if abs(ctrl_msg.steering) > 8.0:
                         target_velocity = vel_profile_50[self.current_waypoint]
                         
-                # print(f"target_velocity : {round(target_velocity * 3.6, 0)}")
-
-                # if self.velocity > 25 and ctrl_msg.steering > 3.5:
-                #     target_velocity = vel_profile_10[self.current_waypoint]
-                
-                # target_velocity = vel_profile[self.current_waypoint]
-
                 if self.velocity > 90:
                     if ctrl_msg.steering > 3:
                         ctrl_msg.steering = 3
                     if ctrl_msg.steering < -3:
                         ctrl_msg.steering = -3
                                     
-
-
                 # speed control method
                 if target_velocity > self.velocity:
                     ctrl_msg.accel = 1
@@ -207,7 +203,7 @@ class gen_planner():
                 local_path_pub.publish(local_path) ## Local Path 출력
                 ctrl_pub.publish(ctrl_msg) ## Vehicl Control 출력
                 odom_pub.publish(self.makeOdomMsg())
-                self.print_info()
+                # self.print_info()
             
                 if count==30 : ## global path 출력
                     global_path_pub.publish(self.global_path)
@@ -242,8 +238,8 @@ class gen_planner():
         self.is_imu = True
     
     def scanCB(self, data):
-        min_dist = float("inf")
-        min_idx = 0
+        limit_distance = 50
+        step = 15
         x = []
         y = []
         filtered_x = []
@@ -252,7 +248,7 @@ class gen_planner():
         filtered_y2 = []
         index_list = []
         index_list2 = []
-        list1 = []
+        mid_point = []
         scan_ranges = [round(data,1) for data in data.ranges]
 
         angle_min = data.angle_min  # 첫 번째 스캔 데이터의 각도
@@ -269,84 +265,64 @@ class gen_planner():
 
                 x.append(x_val)
                 y.append(y_val)
-        
-        for index, data in enumerate(y):
-            if abs(data) < 10:
-                filtered_y.append(data)
-                index_list.append(index)
-        for i in index_list:
-            filtered_x.append(x[i])
-
-        for index, data in enumerate(filtered_x):
-            if 1 < data < 25:
-                filtered_x2.append(data)
-                index_list2.append(index)
-        for i in index_list2:
-            filtered_y2.append(filtered_y[i])
-        
-        self.object_info_msg=[[1,1000,1000,0]]
-        self.obstacle_detected = False
-
-        if not ((6100 < self.current_waypoint < 6350) and (1400 < self.current_waypoint < 2150) and (4257 < self.current_waypoint < 5200)):
-            # self.object_info_msg=[[1,min_dist_x + self.status_msg.position.x,min_dist_y + self.status_msg.position.y,0]]/
-            # self.object_info_msg = [1,closest_x, closest_y,0]
-            for i in range(len(filtered_x2)):
-                list1.append([1, filtered_x2[i], filtered_y2[i], 0])
-            self.object_info_msg = list1
-        else:
-            self.object_info_msg = [[1,1000,1000,0]]
-
-
+        if y:
+            for index, data in enumerate(y):
+                if abs(data) < 1:
+                    filtered_y.append(data)
+                    index_list.append(index)
+            for i in index_list:
+                filtered_x.append(x[i])
+        if x:
+            for index, data in enumerate(filtered_x):
+                if 1 < data < 15:
+                    filtered_x2.append(data)
+                    index_list2.append(index)
+            for i in index_list2:
+                filtered_y2.append(filtered_y[i])
+        if filtered_x2:
+            print("follow gap!")
             self.obstacle_detected = True
+            sublists = self.find_sublists_with_threshold(scan_ranges, limit_distance, step)
+            for i, (start, end) in enumerate(sublists):
+                length = (end - start)/2
+                mid_point.append(int(start + length))
+
+            selected_index = round(len(mid_point)/2) - 1
+            self.steering_angle[1] = -(224 - mid_point[selected_index]) * 90 / 224 * 0.0075
+
+            # if self.steering_angle[1] - self.steering_angle[0] > 1:
+            #     self.steering_angle[1] += 1
+            # if self.steering_angle[1] - self.steering_angle[0]  < -1:
+            #     self.steering_angle[1] -= 1
+            
+            self.steering = self.steering_angle[1]
+        else:
+            print("lattice!")
+            self.obstacle_detected = False
 
         self.is_obj=True
 
-    def detect_color(self, img):
-        # Convert to HSV color space
-        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    def find_sublists_with_threshold(self, lst, threshold, n):
+            sublists = []
+            current_count = 0
+            start = None
 
-        # Define range of yellow color in HSV
-        yellow_lower = np.array([18, 100, 100])
-        yellow_upper = np.array([32, 255, 255])
+            for i, value in enumerate(lst):
+                if value >= threshold:
+                    if start is None:
+                        start = i
+                    current_count += 1
+                else:
+                    if current_count >= n:
+                        sublists.append((start, i - 1))
+                    start = None
+                    current_count = 0
 
-        # Threshold the HSV image to get only yellow colors
-        yellow_mask = cv2.inRange(hsv, yellow_lower, yellow_upper)
-        yellow_color = cv2.bitwise_and(img, img, mask=yellow_mask)
-        return yellow_color
+            # Check if the last sublist extends to the end of the list
+            if current_count >= n:
+                sublists.append((start, len(lst) - 1))
 
-    def img_binary(self, blend_line):
-        bin = cv2.cvtColor(blend_line, cv2.COLOR_BGR2GRAY)
-        binary_line = np.zeros_like(bin)
-        binary_line[bin >127] = 1
-        return binary_line
-    
-    def detect_obj(self, bin_img):
-        bottom_half_y = bin_img.shape[0] * 2 / 3
-        histogram = np.sum(bin_img[int(bottom_half_y) :, :], axis=0)
-        histogram[histogram < 25] = 0
-        print(f"histogram : {histogram}")
-
-        obj_base = np.argmax(histogram)
-        print(f"obj_base : {obj_base}")
-
-        return obj_base
-
-    def img_CB(self, data):
-        img = self.bridge.compressed_imgmsg_to_cv2(data)
-        yellow_obj = self.detect_color(img)
-        bin_img = self.img_binary(yellow_obj)
-        detected_obj = self.detect_obj(bin_img)
-        obj_y_value = (320 - detected_obj) / 20
-        
-        if 200 < detected_obj < 500:
-            self.object_info_msg.append([1,5,obj_y_value,0])
-            self.obstacle_detected = True
-            print(self.object_info_msg)
-        else:
-            print("noting detected by semantic camera")
-
-    def timerCB(self, event):
-        pass
+            return sublists
 
     def makeOdomMsg(self):
         odom=Odometry()
