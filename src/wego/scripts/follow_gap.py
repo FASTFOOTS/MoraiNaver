@@ -18,6 +18,7 @@ class FollowGap():
         self.scan_sub = rospy.Subscriber("/scan", LaserScan, self.lidar_callback, queue_size = 1)
         self.ego_sub = rospy.Subscriber("/Ego_topic",EgoVehicleStatus, self.statusCB, queue_size = 1)
         self.ctrl_msg= CtrlCmd()
+        self.steering_angle = [0,0]
 
     def lidar_callback(self,data):
         x = []
@@ -62,18 +63,33 @@ class FollowGap():
         print("=====//=====================")
 
         sublists = self.find_sublists_with_threshold(scan_ranges, limit_distance, step)
-        print(sublists)
+        
+        if sublists:
+            for i, (start, end) in enumerate(sublists):
+                print(f"부분 {i + 1}: 시작 인덱스 {start}, 끝 인덱스 {end}")
+                length = (end - start)/2
+                mid_point.append(int(start + length))
 
+            # scan_mid_index = scan_ranges[int(len(scan_ranges)/2)]
+            
+            # abs_list = [abs(scan_mid_index - i) for i in mid_point]
 
+            velocity = 50 / 3.6
+            # self.steering_angle[1] = -(224 - min(abs_list)) * 90 / 224 * 0.001
+            selected_index = round(len(mid_point)/2) - 1
+            self.steering_angle[1] = -(224 - mid_point[selected_index]) * 90 / 224 * 0.0075
+        else:
+            self.steering_angle[1] = 0
+            velocity = 50 / 3.6
 
-        for i, (start, end) in enumerate(sublists):
-            print(f"부분 {i + 1}: 시작 인덱스 {start}, 끝 인덱스 {end}")
-            length = (end - start)/2
-            mid_point.append(int(start + length))
+        # if self.steering_angle[1] - self.steering_angle[0] > 1:
+        #     self.steering_angle[1] += 1
+        # if self.steering_angle[1] - self.steering_angle[0]  < -1:
+        #     self.steering_angle[1] -= 1
 
-        # print(mid_point[-1])
-        velocity = 50 / 3.6
-        self.ctrl_msg.steering = -(224 - mid_point[0]) * 90 / 224 * 0.01
+        self.steering_angle[0] = self.steering_angle[1]
+        
+        self.ctrl_msg.steering = self.steering_angle[1]
 
         # speed control method
         if velocity > self.velocity:
