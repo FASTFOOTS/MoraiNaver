@@ -117,7 +117,7 @@ class gen_planner():
     
         #time var
         count=0
-        rate = rospy.Rate(10) # 30hz
+        rate = rospy.Rate(50) # 30hz
 
         while not rospy.is_shutdown():
             # print(self.is_status , self.is_imu ,self.is_gps)
@@ -160,32 +160,14 @@ class gen_planner():
                 else:
                     if self.obstacle_detected:
                         target_velocity = vel_profile_70[self.current_waypoint]
-                    else:
-                        if (0 < self.current_waypoint < 240):
-                            target_velocity = vel_profile_70[self.current_waypoint]
-                        elif(650 < self.current_waypoint <  778) or \
-                        (1330 < self.current_waypoint < 1450) or \
-                        (2056 < self.current_waypoint < 2150) or \
-                        (2780 < self.current_waypoint < 2921) or \
-                        (3530 < self.current_waypoint < 3630) or \
-                        (4200 < self.current_waypoint < 4300) or \
-                        (5090 < self.current_waypoint < 5160) or \
-                        (5650 < self.current_waypoint < 5990):
-                            target_velocity = vel_profile_70[self.current_waypoint]
-                        elif (778 < self.current_waypoint < 1300) or \
-                            (2150 < self.current_waypoint < 2699) or \
-                            (2921 < self.current_waypoint < 3300) or \
-                            (3800 < self.current_waypoint < 4190) or \
-                            (5160 < self.current_waypoint < 5600):
-                                target_velocity = vel_profile_70[self.current_waypoint]
-                        else:
-                            target_velocity = vel_profile_70[self.current_waypoint]
+# 1350 2220
+# 4600 5525
                     
                     if abs(ctrl_msg.steering) > 4.5:
-                        target_velocity = vel_profile_70[self.current_waypoint]
+                        target_velocity = vel_profile_50[self.current_waypoint]
 
                     if abs(ctrl_msg.steering) > 8.0:
-                        target_velocity = vel_profile_70[self.current_waypoint]
+                        target_velocity = vel_profile_50[self.current_waypoint]
                         
                 # print(f"target_velocity : {round(target_velocity * 3.6, 0)}")
 
@@ -225,7 +207,7 @@ class gen_planner():
                 local_path_pub.publish(local_path) ## Local Path 출력
                 ctrl_pub.publish(ctrl_msg) ## Vehicl Control 출력
                 odom_pub.publish(self.makeOdomMsg())
-                # self.print_info()
+                self.print_info()
             
                 if count==30 : ## global path 출력
                     global_path_pub.publish(self.global_path)
@@ -305,12 +287,14 @@ class gen_planner():
         self.object_info_msg=[[1,1000,1000,0]]
         self.obstacle_detected = False
 
-        if not ((5681 < self.current_waypoint < 5915) and (1400 < self.current_waypoint < 2150) and (4257 < self.current_waypoint < 5200)):
+        if not ((6100 < self.current_waypoint < 6350) and (1400 < self.current_waypoint < 2150) and (4257 < self.current_waypoint < 5200)):
             # self.object_info_msg=[[1,min_dist_x + self.status_msg.position.x,min_dist_y + self.status_msg.position.y,0]]/
             # self.object_info_msg = [1,closest_x, closest_y,0]
             for i in range(len(filtered_x2)):
                 list1.append([1, filtered_x2[i], filtered_y2[i], 0])
             self.object_info_msg = list1
+        else:
+            self.object_info_msg = [[1,1000,1000,0]]
 
 
             self.obstacle_detected = True
