@@ -301,7 +301,7 @@ def latticePlanner(ref_path,global_vaild_object,vehicle_status,current_lane):
         local_end_point=det_t.dot(world_end_point)
         world_ego_vehicle_position=np.array([[vehicle_status[0]],[vehicle_status[1]],[1]])
         local_ego_vehicle_position=det_t.dot(world_ego_vehicle_position)
-        lane_off_set=[5.7,3.5,2.8,0,-2.8,-3.5,-5.7]
+        lane_off_set=[2.5,1.6,0.8,0,-0.8,-1.6,-2.5]
         local_lattice_points=[]
         for i in range(len(lane_off_set)):
             local_lattice_points.append([local_end_point[0][0],local_end_point[1][0]+lane_off_set[i],1])

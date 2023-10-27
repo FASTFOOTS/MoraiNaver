@@ -39,7 +39,9 @@ class gen_planner():
         self.min_angle = 0.0
         self.min_dist = 0.0
 
-        self.object_info_msg = []
+        self.object_info_msg=[[1,1000,1000,0]]
+        self.obstacle_detected = False
+
         self.current_waypoint = 0
 
         abs_flag = True
@@ -70,6 +72,7 @@ class gen_planner():
         self.ego_sub = rospy.Subscriber("/Ego_topic",EgoVehicleStatus, self.statusCB, queue_size = 1)
         self.scan_sub = rospy.Subscriber("/scan", LaserScan, self.scanCB, queue_size = 1)
         self.image_sub = rospy.Subscriber("/segmantic_image_jpeg/compressed", CompressedImage, self.img_CB)
+        self.object_info_timer = rospy.Timer(rospy.Duration(0.15), self.timerCB)
 
         #def
         self.is_status = False
@@ -129,6 +132,7 @@ class gen_planner():
 
                 ########################  lattice  ########################
                 vehicle_status=[self.status_msg.position.x,self.status_msg.position.y,(self.status_msg.heading)/180*pi,self.status_msg.velocity.x]
+                print(f"obj : {self.object_info_msg}")
                 lattice_path,selected_lane=latticePlanner(local_path,self.object_info_msg,vehicle_status,lattice_current_lane)
                 lattice_current_lane=selected_lane
                 # print(f"lattice_current_lane : {lattice_current_lane}")
@@ -158,7 +162,7 @@ class gen_planner():
                         target_velocity = vel_profile_50[self.current_waypoint]
                     else:
                         if (0 < self.current_waypoint < 240):
-                            target_velocity = vel_profile_70[self.current_waypoint]
+                            target_velocity = vel_profile_50[self.current_waypoint]
                         elif(650 < self.current_waypoint <  778) or \
                         (1330 < self.current_waypoint < 1450) or \
                         (2056 < self.current_waypoint < 2150) or \
@@ -167,15 +171,15 @@ class gen_planner():
                         (4200 < self.current_waypoint < 4300) or \
                         (5090 < self.current_waypoint < 5160) or \
                         (5650 < self.current_waypoint < 5990):
-                            target_velocity = vel_profile_70[self.current_waypoint]
+                            target_velocity = vel_profile_50[self.current_waypoint]
                         elif (778 < self.current_waypoint < 1300) or \
-                            (2150 < self.current_waypoint < 2700) or \
+                            (2150 < self.current_waypoint < 2699) or \
                             (2921 < self.current_waypoint < 3300) or \
                             (3800 < self.current_waypoint < 4190) or \
                             (5160 < self.current_waypoint < 5600):
-                                target_velocity = vel_profile_90[self.current_waypoint]
+                                target_velocity = vel_profile_70[self.current_waypoint]
                         else:
-                            target_velocity = vel_profile_70[self.current_waypoint]
+                            target_velocity = vel_profile_50[self.current_waypoint]
                     
                     if abs(ctrl_msg.steering) > 4.5:
                         target_velocity = vel_profile_50[self.current_waypoint]
@@ -221,7 +225,7 @@ class gen_planner():
                 local_path_pub.publish(local_path) ## Local Path 출력
                 ctrl_pub.publish(ctrl_msg) ## Vehicl Control 출력
                 odom_pub.publish(self.makeOdomMsg())
-                self.print_info()
+                # self.print_info()
             
                 if count==30 : ## global path 출력
                     global_path_pub.publish(self.global_path)
@@ -262,13 +266,11 @@ class gen_planner():
         y = []
         filtered_x = []
         filtered_y = []
+        filtered_x2 = []
+        filtered_y2 = []
         index_list = []
+        index_list2 = []
         scan_ranges = [round(data,1) for data in data.ranges]
-
-        # for idx, val in enumerate(scan_ranges): 
-        #     if min_dist > val:
-        #         min_dist = val
-        #         min_idx = idx
 
         angle_min = data.angle_min  # 첫 번째 스캔 데이터의 각도
         angle_increment = data.angle_increment  # 각 스캔 데이터 사이의 각도 간격
@@ -286,26 +288,34 @@ class gen_planner():
                 y.append(y_val)
         
         for index, data in enumerate(y):
-            if abs(data) < 2.0:
+            if abs(data) < 0.9:
                 filtered_y.append(data)
                 index_list.append(index)
         for i in index_list:
             filtered_x.append(x[i])
 
-        if len(filtered_x) > 0:
+        for index, data in enumerate(filtered_x):
+            if data > 1:
+                filtered_x2.append(data)
+                index_list2.append(index)
+        for i in index_list2:
+            filtered_y2.append(filtered_y[i])
+
+
+        if len(filtered_x2) > 0:
             min_distance = float("inf")
             min_index = 0
 
-            for i in range(len(filtered_x)):
-                distance = sqrt(filtered_x[i]**2 + filtered_y[i]**2)
+            for i in range(len(filtered_x2)):
+                distance = sqrt(filtered_x2[i]**2 + filtered_y2[i]**2)
                 if distance < min_distance:
                     min_distance = distance
                     min_index = i
 
             # Now, min_distance contains the minimum distance, and min_index is the index of the closest point
-            closest_x = filtered_x[min_index]
-            closest_y = filtered_y[min_index]
-            print(f"closet_point : ({closest_x},{closest_y})")
+            closest_x = filtered_x2[min_index]
+            closest_y = filtered_y2[min_index]
+            # print(f"closest_point : ({closest_x},{closest_y})")
         else:
             # Handle the case where there are no points in the filtered lists
             closest_x = 1000
@@ -323,14 +333,14 @@ class gen_planner():
 
         if abs(min_distance) < 30:#min_dist_x < 15 and abs(min_dist_y) < 2.5:
             if not (5681 < self.current_waypoint < 5915):
-                # self.object_info_msg=[[1,min_dist_x + self.status_msg.position.x,min_dist_y + self.status_msg.position.y,0]]/
-                self.object_info_msg=[[1,closest_x, closest_y,0]]
+                self.object_info_msg=[[1,min_dist_x + self.status_msg.position.x,min_dist_y + self.status_msg.position.y,0]]/
+                self.object_info_msg.append([1,closest_x, closest_y,0])
                 self.object_num = 1
                 self.obstacle_detected = True
                 # print(f"obj x,y : ({min_dist_x},{min_dist_y})")
         else:
-            self.object_info_msg=[[1,1000,1000,0]]
-            self.object_num = 0
+            # self.object_info_msg=[[1,1000,1000,0]]
+            # self.object_num = 0
             self.obstacle_detected = False
 
         self.is_obj=True
@@ -379,6 +389,9 @@ class gen_planner():
         else:
             print("noting detected by semantic camera")
 
+    def timerCB(self, event):
+        del self.object_info_msg[:1]
+
     def makeOdomMsg(self):
         odom=Odometry()
         odom.header.frame_id='map'
@@ -399,7 +412,7 @@ class gen_planner():
 
     def print_info(self):
 
-        os.system('clear')
+        # os.system('clear')
         # print('--------------------status-------------------------')
         # print('position :{0} ,{1}, {2}'.format(self.status_msg.position.x,self.status_msg.position.y,self.status_msg.position.z))
         # print('velocity :{} km/h'.format(self.status_msg.velocity.x))
