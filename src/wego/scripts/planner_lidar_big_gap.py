@@ -75,7 +75,6 @@ class gen_planner():
         self.imu_sub = rospy.Subscriber("/imu", Imu, self.imuCB, queue_size=1)
         self.ego_sub = rospy.Subscriber("/Ego_topic",EgoVehicleStatus, self.statusCB, queue_size = 1)
         self.scan_sub = rospy.Subscriber("/scan", LaserScan, self.scanCB, queue_size = 1)
-        self.img_sub = rospy.Subscriber("/image_jpeg/compressed", CompressedImage, self.img_CB)
 
 
         #def
@@ -90,29 +89,29 @@ class gen_planner():
 
         self.global_path = path_reader.read_txt(self.path_name)
 
-        # normal_velocity_30 = 30/3.6 # km/h -> m/s
-        # vel_planner_30=velocityPlanning(normal_velocity_30,0.15) ## 속도 계획
-        # vel_profile_30=vel_planner_30.curveBasedVelocity(self.global_path,100)
+        normal_velocity_30 = 30/3.6 # km/h -> m/s
+        vel_planner_30=velocityPlanning(normal_velocity_30,0.15) ## 속도 계획
+        vel_profile_30=vel_planner_30.curveBasedVelocity(self.global_path,100)
 
-        # normal_velocity_10 = 10/3.6 # km/h -> m/s
-        # vel_planner_10=velocityPlanning(normal_velocity_10,0.15) ## 속도 계획
-        # vel_profile_10=vel_planner_10.curveBasedVelocity(self.global_path,100)
+        normal_velocity_10 = 10/3.6 # km/h -> m/s
+        vel_planner_10=velocityPlanning(normal_velocity_10,0.15) ## 속도 계획
+        vel_profile_10=vel_planner_10.curveBasedVelocity(self.global_path,100)
 
-        # normal_velocity_50 = 50/3.6 # km/h -> m/s
-        # vel_planner_50=velocityPlanning(normal_velocity_50,0.15) ## 속도 계획
-        # vel_profile_50=vel_planner_50.curveBasedVelocity(self.global_path,100)
+        normal_velocity_50 = 50/3.6 # km/h -> m/s
+        vel_planner_50=velocityPlanning(normal_velocity_50,0.15) ## 속도 계획
+        vel_profile_50=vel_planner_50.curveBasedVelocity(self.global_path,100)
 
         normal_velocity_70 = 70/3.6 # km/h -> m/s
         vel_planner_70=velocityPlanning(normal_velocity_70,0.15) ## 속도 계획
         vel_profile_70=vel_planner_70.curveBasedVelocity(self.global_path,100)
 
-        # normal_velocity_90 = 90/3.6 # km/h -> m/s
-        # vel_planner_90=velocityPlanning(normal_velocity_90,0.15) ## 속도 계획
-        # vel_profile_90=vel_planner_90.curveBasedVelocity(self.global_path,100)
+        normal_velocity_90 = 90/3.6 # km/h -> m/s
+        vel_planner_90=velocityPlanning(normal_velocity_90,0.15) ## 속도 계획
+        vel_profile_90=vel_planner_90.curveBasedVelocity(self.global_path,100)
 
-        # normal_velocity_100 = 100/3.6 # km/h -> m/s
-        # vel_planner_100=velocityPlanning(normal_velocity_100,0.15) ## 속도 계획
-        # vel_profile_100=vel_planner_100.curveBasedVelocity(self.global_path,100)
+        normal_velocity_100 = 100/3.6 # km/h -> m/s
+        vel_planner_100=velocityPlanning(normal_velocity_100,0.15) ## 속도 계획
+        vel_profile_100=vel_planner_100.curveBasedVelocity(self.global_path,100)
         
 
         
@@ -146,13 +145,12 @@ class gen_planner():
                     for i in range(1,22):
                         globals()['lattice_path_{}_pub'.format(i)].publish(lattice_path[i-1])
                 ########################  lattice  ########################
+# (630< self.current_waypoint < 700) or \
 
                 pure_pursuit.getPath(local_path) ## pure_pursuit 알고리즘에 Local path 적용
                 pure_pursuit.getEgoStatus(self.status_msg) ## pure_pursuit 알고리즘에 차량의 status 적용
-
-# (630< self.current_waypoint < 700) or \
-# (0< self.current_waypoint < 130) or \                
-                if (408< self.current_waypoint < 450) or \
+                if (0< self.current_waypoint < 130) or \
+                    (408< self.current_waypoint < 450) or \
                     (1375< self.current_waypoint < 1446) or \
                     (1640< self.current_waypoint < 1730) or \
                     (1862< self.current_waypoint < 1920) or \
@@ -160,14 +158,28 @@ class gen_planner():
                     (3000< self.current_waypoint < 3076) or \
                     (3877< self.current_waypoint < 3911) or \
                     (4610< self.current_waypoint < 4643):
-                    # ctrl_msg.steering=self.steering
-                    ctrl_msg.steering=-pure_pursuit.steering_angle()
+                    ctrl_msg.steering=self.steering
+                    # ctrl_msg.steering=-pure_pursuit.steering_angle()
                     # print("lattice planner")
                 else:
                     # print("follow the gap")
                     ctrl_msg.steering=self.steering
                 target_velocity = vel_profile_70[self.current_waypoint]
+                # if abs(self.wheel_angle) > 4.5:
+                #     if abs(self.wheel_angle) > 8.0:
+                #         target_velocity = vel_profile_50[self.current_waypoint]
+                #     else:
+                #         target_velocity = vel_profile_50[self.current_waypoint]
+                # else:
+                #     target_velocity = vel_profile_50[self.current_waypoint]
+                #     if self.obstacle_detected:
+                #         target_velocity = vel_profile_70[self.current_waypoint]
+                    
+                #     if abs(ctrl_msg.steering) > 4.5:
+                #         target_velocity = vel_profile_50[self.current_waypoint]
 
+                #     if abs(ctrl_msg.steering) > 8.0:
+                #         target_velocity = vel_profile_50[self.current_waypoint]
                         
                 if self.velocity > 90:
                     if ctrl_msg.steering > 3:
@@ -233,7 +245,6 @@ class gen_planner():
         self.is_imu = True
     
     def scanCB(self, data):
-        # print(f"current_waypoint : {self.current_waypoint}")
         limit_distance = 50
         step = 15
         x = []
@@ -251,10 +262,9 @@ class gen_planner():
         del scan_ranges[:224]
         del scan_ranges[480:]
         
-        # print("===========================")
-        # print(scan_ranges)
+        print("===========================")
+        print(scan_ranges)
         sublists = self.find_sublists_with_threshold(scan_ranges, limit_distance, step)
-        
         if sublists:
             # print("step 50")
             pass
@@ -290,127 +300,25 @@ class gen_planner():
 
         self.is_obj=True
 
-    def detect_color(self, img):
-        # Convert to HSV color space
-        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-
-        # Define range of yellow color in HSV
-        # yellow_lower = np.array([20, 100, 100])
-        # yellow_upper = np.array([30, 255, 255])
-        yellow_lower = np.array([18, 100, 100])
-        yellow_upper = np.array([32, 255, 255])
-
-        # Threshold the HSV image to get only yellow colors
-        yellow_mask = cv2.inRange(hsv, yellow_lower, yellow_upper)
-
-        # Threshold the HSV image to get blend colors
-        yellow_color = cv2.bitwise_and(img, img, mask=yellow_mask)
-        return yellow_color
-
-    def img_warp(self, img):
-        self.img_x, self.img_y = img.shape[1], img.shape[0]
-        # print(f'self.img_x:{self.img_x}, self.img_y:{self.img_y}')
-
-        img_size = [640, 480]
-        # ROI
-        src_side_offset = [0, 240]
-        src_center_offset = [250, 1]
-        src = np.float32(
-            [
-                [0, 479],
-                [src_center_offset[0], src_center_offset[1]],
-                [640 - src_center_offset[0], src_center_offset[1]],
-                [639, 479],
-            ]
-        )
-        # 아래 2 개 점 기준으로 dst 영역을 설정합니다.
-        dst_offset = [round(self.img_x * 0.125), 0]
-        # offset x 값이 작아질 수록 dst box width 증가합니다.
-        dst = np.float32(
-            [
-                [dst_offset[0], self.img_y],
-                [dst_offset[0], 0],
-                [self.img_x - dst_offset[0], 0],
-                [self.img_x - dst_offset[0], self.img_y],
-            ]
-        )
-        # find perspective matrix
-        matrix = cv2.getPerspectiveTransform(src, dst)
-        matrix_inv = cv2.getPerspectiveTransform(dst, src)
-        warp_img = cv2.warpPerspective(img, matrix, (self.img_x, self.img_y))
-        return warp_img
-
-    def img_binary(self, blend_line):
-        bin = cv2.cvtColor(blend_line, cv2.COLOR_BGR2GRAY)
-        binary_line = np.zeros_like(bin)
-        binary_line[bin >127] = 1
-        return binary_line
-    
-    def detect_obj_and_steering(self, bin_img):
-        img_sublishts = []
-        bottom_half_y = bin_img.shape[0] * 2 / 3
-        histogram = np.sum(bin_img[int(bottom_half_y) :, :], axis=0)
-        histogram[histogram < 5] = 0
-
-        img_sublishts = self.find_sublists_with_threshold(histogram, 24, 2, 0)
-        
-        # obj_base = np.argmax(histogram)
-        # print(f"obj_base : {obj_base}")
-
-        return img_sublishts
-
-    def img_CB(self, data):
-        print("=========================")
-        img = self.bridge.compressed_imgmsg_to_cv2(data)
-        warp_img = self.img_warp(img)
-        yellow_obj = self.detect_color(warp_img)
-        bin_img = self.img_binary(yellow_obj)
-        
-        # print(bin_img)
-        detected_obj = self.detect_obj_and_steering(bin_img)
-        print(f"detected_obj : {detected_obj}")
-        # obj_y_value = (320 - detected_obj) / 20
-        
-        # if 200 < detected_obj < 500:
-        #     self.object_info_msg.append([1,5,obj_y_value,0])
-        #     self.obstacle_detected = True
-        #     print(self.object_info_msg)
-        # else:
-        #     print("noting detected by semantic camera")
-
-    def find_sublists_with_threshold(self, lst, threshold, n, type=1):
+    def find_sublists_with_threshold(self, lst, threshold, n):
             sublists = []
             current_count = 0
             start = None
-            if type:
-                for i, value in enumerate(lst):
-                    if value >= threshold:
-                        if start is None:
-                            start = i
-                        current_count += 1
-                    else:
-                        if current_count >= n:
-                            sublists.append((start, i - 1))
-                        start = None
-                        current_count = 0
-            else:
-                for i, value in enumerate(lst):
-                    if value <= threshold:
-                        if start is None:
-                            start = i
-                        current_count += 1
-                    else:
-                        if current_count >= n:
-                            sublists.append((start, i - 1))
-                        start = None
-                        current_count = 0
+
+            for i, value in enumerate(lst):
+                if value >= threshold:
+                    if start is None:
+                        start = i
+                    current_count += 1
+                else:
+                    if current_count >= n:
+                        sublists.append((start, i - 1))
+                    start = None
+                    current_count = 0
 
             # Check if the last sublist extends to the end of the list
-            if type == 1 and current_count >= n:
+            if current_count >= n:
                 sublists.append((start, len(lst) - 1))
-            elif type == 0 and current_count >= n:
-                sublists.append((start, len(lst)))
-
 
             return sublists
 
