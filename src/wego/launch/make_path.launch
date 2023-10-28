@@ -1,6 +1,6 @@
 <launch>
 	<!-- args = "(경로가 생성되는 폴더 이름) (생성할 경로의 파일 이름) (x_offset) (y_offset)" -->
-	<node pkg="wego" type="path_maker.py" name="maker" args="path naver_sim 314494.0581980597 4160624.929391573" output="screen" />
+	<node pkg="wego" type="path_maker.py" name="maker" args="path morai_sim 314494.0581980597 4160624.929391573" output="screen" />
 </launch>
 
 <!-- 314390.18561788305 4160404.4778176406 -->

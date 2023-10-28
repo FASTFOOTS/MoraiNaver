@@ -154,7 +154,7 @@ class purePursuit :
         # PID control constants
         # emoji test
         # title test
-        kp = 0.01  # Proportional gain
+        kp = 0.02  # Proportional gain
         ki = 0.001#0.01  # Integral gain
         kd = 0.0005#0.005  # Derivative gain
 
