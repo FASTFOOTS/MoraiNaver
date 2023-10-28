@@ -58,9 +58,9 @@ class FollowGap():
         for idx, val in enumerate(zip(x, y)):
             if (hypot(val[0] - min_point[0], val[1] - min_point[1]) < rb):
                 scan_ranges[idx] = 0
-
-        print(scan_ranges)
+        
         print("=====//=====================")
+        print(scan_ranges)
 
         sublists = self.find_sublists_with_threshold(scan_ranges, limit_distance, step)
         
@@ -74,13 +74,13 @@ class FollowGap():
             
             # abs_list = [abs(scan_mid_index - i) for i in mid_point]
 
-            velocity = 50 / 3.6
             # self.steering_angle[1] = -(224 - min(abs_list)) * 90 / 224 * 0.001
             selected_index = round(len(mid_point)/2) - 1
             self.steering_angle[1] = -(224 - mid_point[selected_index]) * 90 / 224 * 0.0075
         else:
             self.steering_angle[1] = 0
-            velocity = 50 / 3.6
+
+        velocity = 50 / 3.6
 
         # if self.steering_angle[1] - self.steering_angle[0] > 1:
         #     self.steering_angle[1] += 1
