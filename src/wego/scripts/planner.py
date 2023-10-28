@@ -11,7 +11,7 @@ from geometry_msgs.msg import PoseStamped,Point,Twist
 from sensor_msgs.msg import LaserScan
 from utils import *
 import tf
-from math import cos,sin,sqrt,pow,atan2,pi, isinf, isnan
+from math import cos,sin,sqrt,pow,atan2,pi, isinf, isnan, hypot
 from morai_msgs.msg import GPSMessage, EgoVehicleStatus, CtrlCmd
 import pyproj
 from sensor_msgs.msg import Imu, CompressedImage, Image
@@ -39,11 +39,13 @@ class gen_planner():
         self.min_angle = 0.0
         self.min_dist = 0.0
 
-        self.steering = 0
-        self.steering_angle = [0,0]
+        self.steering = [0,0]
 
         self.object_info_msg=[[1,1000,1000,0]]
         self.obstacle_detected = False
+        self.img_obstacle_detected = False
+        self.histogram = 0
+        self.msg = "default"
 
         self.current_waypoint = 0
         
@@ -75,7 +77,6 @@ class gen_planner():
         self.imu_sub = rospy.Subscriber("/imu", Imu, self.imuCB, queue_size=1)
         self.ego_sub = rospy.Subscriber("/Ego_topic",EgoVehicleStatus, self.statusCB, queue_size = 1)
         self.scan_sub = rospy.Subscriber("/scan", LaserScan, self.scanCB, queue_size = 1)
-        self.img_sub = rospy.Subscriber("/image_jpeg/compressed", CompressedImage, self.img_CB)
 
 
         #def
@@ -146,12 +147,10 @@ class gen_planner():
                     for i in range(1,22):
                         globals()['lattice_path_{}_pub'.format(i)].publish(lattice_path[i-1])
                 ########################  lattice  ########################
-
+                    # (5285< self.current_waypoint < 5342) or \
+                    # (5459< self.current_waypoint < 5555) or \
                 pure_pursuit.getPath(local_path) ## pure_pursuit 알고리즘에 Local path 적용
                 pure_pursuit.getEgoStatus(self.status_msg) ## pure_pursuit 알고리즘에 차량의 status 적용
-
-# (630< self.current_waypoint < 700) or \
-# (0< self.current_waypoint < 130) or \                
                 if (0< self.current_waypoint < 200) or \
                     (500< self.current_waypoint < 608) or \
                     (950< self.current_waypoint < 970) or \
@@ -160,23 +159,21 @@ class gen_planner():
                     (2212< self.current_waypoint < 2290) or \
                     (2500< self.current_waypoint < 2557) or \
                     (3918< self.current_waypoint < 4000) or \
-                    (5285< self.current_waypoint < 5342) or \
-                    (5459< self.current_waypoint < 5555) or \
                     (5928< self.current_waypoint < 5769) or \
                     (6040< self.current_waypoint < 6100) or \
                     (6245< self.current_waypoint < 6308) or \
                     (7200< self.current_waypoint < 7560) or \
                     (4730< self.current_waypoint < 4768):
-                    # ctrl_msg.steering=self.steering
                     ctrl_msg.steering=-pure_pursuit.steering_angle()
-                    print("lattice planner")
+                    self.msg = "lattice planner"
                 else:
-                    print("follow the gap")
-                    ctrl_msg.steering=self.steering
+                    self.msg = "follow the gap"
+                    ctrl_msg.steering=self.steering[0]
+                    
+                
                 target_velocity = vel_profile_70[self.current_waypoint]
-
-                        
-                if self.velocity > 90:
+       
+                if self.velocity > 70:
                     if ctrl_msg.steering > 3:
                         ctrl_msg.steering = 3
                     if ctrl_msg.steering < -3:
@@ -240,23 +237,41 @@ class gen_planner():
         self.is_imu = True
     
     def scanCB(self, data):
+        steering_angle = 0
         # print(f"current_waypoint : {self.current_waypoint}")
         limit_distance = 50
         step = 15
-        x = []
-        y = []
-        filtered_x = []
-        filtered_y = []
-        filtered_x2 = []
-        filtered_y2 = []
-        index_list = []
-        index_list2 = []
+        ranges = list(data.ranges)
+
         mid_point = []
         length_list = []
-        
-        scan_ranges = [round(data,5) for data in data.ranges]
-        del scan_ranges[:224]
-        del scan_ranges[480:]
+        x = []
+        y = []
+        rb = 0.1
+
+        del ranges[:224]
+        del ranges[480:]
+        scan_ranges = [round(data,3) for data in ranges]
+
+        min_range_point_idx = ranges.index(min(ranges))
+
+        for i, range_val in enumerate(scan_ranges):
+            if not isnan(range_val):
+                # Calculate the angle for this range value
+                angle = data.angle_min + i * data.angle_increment
+
+                # Convert polar coordinates to Cartesian coordinates
+                x_val = range_val * cos(angle)
+                y_val = range_val * sin(angle)
+
+                x.append(x_val)
+                y.append(y_val)
+
+        min_point = (x[min_range_point_idx], y[min_range_point_idx])
+        # print("============after 0==============")
+        for idx, val in enumerate(zip(x, y)):
+            if (hypot(val[0] - min_point[0], val[1] - min_point[1]) < rb):
+                scan_ranges[idx] = 0
         
         # print("===========================")
         # print(scan_ranges)
@@ -274,26 +289,25 @@ class gen_planner():
                 # print("no step")
                 one_point_index = scan_ranges.index(max(scan_ranges))
                 sublists = [(one_point_index, one_point_index+1)] # max value of scan_ranges
+
+        if len(sublists) > 1:
+            self.obstacle_detected = True
+        else:
+            self.obstacle_detected = False
+
         # print(sublists)
         for i, (start, end) in enumerate(sublists):
             # print(f"부분 {i + 1}: 시작 인덱스 {start}, 끝 인덱스 {end}")
             length = (end - start)/2
             mid_point.append(int(start + length))
             length_list.append(length)
-
-        # selected_index = round(len(mid_point)/2) - 1
-        selected_index = length_list.index(max(length_list))
-        self.steering_angle[1] = -(224 - mid_point[selected_index]) * 90 / 224 * 0.0075
-
-        # if self.steering_angle[1] - self.steering_angle[0] > 1:
-        #     self.steering_angle[1] += 1
-        # if self.steering_angle[1] - self.steering_angle[0]  < -1:
-        #     self.steering_angle[1] -= 1
         
-        self.steering = self.steering_angle[1]
-        # else:
-        #     # print("lattice!")/
-        #     self.obstacle_detected = False
+        
+
+        selected_index = length_list.index(max(length_list))
+        steering_angle = -(224 - mid_point[selected_index]) * 90 / 224 * 0.0075
+        
+        self.steering[0] = steering_angle
 
         self.is_obj=True
 
@@ -304,8 +318,8 @@ class gen_planner():
         # Define range of yellow color in HSV
         # yellow_lower = np.array([20, 100, 100])
         # yellow_upper = np.array([30, 255, 255])
-        yellow_lower = np.array([18, 100, 100])
-        yellow_upper = np.array([32, 255, 255])
+        yellow_lower = np.array([22, 255, 255])
+        yellow_upper = np.array([42, 255, 255])
 
         # Threshold the HSV image to get only yellow colors
         yellow_mask = cv2.inRange(hsv, yellow_lower, yellow_upper)
@@ -314,137 +328,25 @@ class gen_planner():
         yellow_color = cv2.bitwise_and(img, img, mask=yellow_mask)
         return yellow_color
 
-    def img_warp(self, img):
-        self.img_x, self.img_y = img.shape[1], img.shape[0]
-        # print(f'self.img_x:{self.img_x}, self.img_y:{self.img_y}')
-
-        img_size = [640, 480]
-        # ROI
-        src_side_offset = [0, 240]
-        src_center_offset = [250, 1]
-        src = np.float32(
-            [
-                [0, 479],
-                [src_center_offset[0], src_center_offset[1]],
-                [640 - src_center_offset[0], src_center_offset[1]],
-                [639, 479],
-            ]
-        )
-        # 아래 2 개 점 기준으로 dst 영역을 설정합니다.
-        dst_offset = [round(self.img_x * 0.125), 0]
-        # offset x 값이 작아질 수록 dst box width 증가합니다.
-        dst = np.float32(
-            [
-                [dst_offset[0], self.img_y],
-                [dst_offset[0], 0],
-                [self.img_x - dst_offset[0], 0],
-                [self.img_x - dst_offset[0], self.img_y],
-            ]
-        )
-        # find perspective matrix
-        matrix = cv2.getPerspectiveTransform(src, dst)
-        matrix_inv = cv2.getPerspectiveTransform(dst, src)
-        warp_img = cv2.warpPerspective(img, matrix, (self.img_x, self.img_y))
-        return warp_img
-
-    def img_binary(self, blend_line):
-        bin = cv2.cvtColor(blend_line, cv2.COLOR_BGR2GRAY)
-        binary_line = np.zeros_like(bin)
-        binary_line[bin >127] = 1
-        return binary_line
-    
-    def detect_obj_and_steering(self, bin_img):
-        img_sublishts = []
-        bottom_half_y = bin_img.shape[0] * 1 / 3
-        histogram = np.sum(bin_img[int(bottom_half_y) :, :], axis=0)
-        histogram[histogram < 5] = 0
-
-        # img_sublishts = self.find_sublists_with_threshold(histogram, 24, 5, 0)
-        
-        # obj_base = np.argmax(histogram)
-        # print(f"obj_base : {obj_base}")
-
-        return histogram 
-
-    def img_CB(self, data):
-        mid_point = []
-        length_list = []
-
-        # print("=========================")
-        img = self.bridge.compressed_imgmsg_to_cv2(data)
-        warp_img = self.img_warp(img)
-        yellow_obj = self.detect_color(warp_img)
-        bin_img = self.img_binary(yellow_obj)
-        
-        # print(bin_img)
-        histogram = self.detect_obj_and_steering(bin_img)
-        sublists = self.find_sublists_with_threshold(histogram, 24, 5, 0)
-        if sublists:
-            # print("step 50")
-            pass
-        else: # under 15 bundle more than 50 
-            sublists = self.find_sublists_with_threshold(histogram, 24, 1, 0) # step = 1
-            if sublists:
-                # print("step 1")
-                pass
-            else: # doesn't have more than 50
-                # print("no step")
-                one_point_index = histogram.index(max(histogram))
-                sublists = [(one_point_index, one_point_index+1)] # max value of scan_ranges
-        # print(sublists)
-        for i, (start, end) in enumerate(sublists):
-            # print(f"부분 {i + 1}: 시작 인덱스 {start}, 끝 인덱스 {end}")
-            length = (end - start)/2
-            mid_point.append(int(start + length))
-            length_list.append(length)
-
-        # selected_index = round(len(mid_point)/2) - 1
-        selected_index = length_list.index(max(length_list))
-        self.steering_angle[1] = -(224 - mid_point[selected_index]) * 90 / 224 * 0.001
-
-
-        # obj_y_value = (320 - detected_obj) / 20
-        
-        # if 200 < detected_obj < 500:
-        #     self.object_info_msg.append([1,5,obj_y_value,0])
-        #     self.obstacle_detected = True
-        #     print(self.object_info_msg)
-        # else:
-        #     print("noting detected by semantic camera")
-
-    def find_sublists_with_threshold(self, lst, threshold, n, type=1):
+    def find_sublists_with_threshold(self, lst, threshold, n):
             sublists = []
             current_count = 0
             start = None
-            if type:
-                for i, value in enumerate(lst):
-                    if value >= threshold:
-                        if start is None:
-                            start = i
-                        current_count += 1
-                    else:
-                        if current_count >= n:
-                            sublists.append((start, i - 1))
-                        start = None
-                        current_count = 0
-            else:
-                for i, value in enumerate(lst):
-                    if value <= threshold:
-                        if start is None:
-                            start = i
-                        current_count += 1
-                    else:
-                        if current_count >= n:
-                            sublists.append((start, i - 1))
-                        start = None
-                        current_count = 0
-
+            for i, value in enumerate(lst):
+                if value >= threshold:
+                    if start is None:
+                        start = i
+                    current_count += 1
+                else:
+                    if current_count >= n:
+                        sublists.append((start, i - 1))
+                    start = None
+                    current_count = 0
             # Check if the last sublist extends to the end of the list
             if type == 1 and current_count >= n:
                 sublists.append((start, len(lst) - 1))
             elif type == 0 and current_count >= n:
                 sublists.append((start, len(lst)))
-
 
             return sublists
 
@@ -469,7 +371,8 @@ class gen_planner():
     def print_info(self):
 
         os.system('clear')
-        # print('--------------------status-------------------------')
+        print('--------------------status-------------------------')
+        print(self.msg)
         # print('position :{0} ,{1}, {2}'.format(self.status_msg.position.x,self.status_msg.position.y,self.status_msg.position.z))
         # print('velocity :{} km/h'.format(self.status_msg.velocity.x))
         # print('heading :{} deg'.format(self.status_msg.heading))

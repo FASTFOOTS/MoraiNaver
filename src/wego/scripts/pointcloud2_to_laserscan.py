@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 import rospy
 import sensor_msgs.point_cloud2 as pc2
 from sensor_msgs.msg import PointCloud2, LaserScan
@@ -5,11 +8,11 @@ import math
 
 def pointcloud_to_laserscan(pointcloud_msg, laser_frame_id, min_height, max_height):
     # Laser scan parameters
-    angle_min = -math.pi
-    angle_max = math.pi
-    angle_increment = 0.005
-    range_min = 0.0
-    range_max = 130.0
+    angle_min = -3.14
+    angle_max = 3.14
+    angle_increment = 0.007
+    range_min = 0.4
+    range_max = 200.0
 
     # Create a LaserScan message
     laserscan_msg = LaserScan()
@@ -20,6 +23,7 @@ def pointcloud_to_laserscan(pointcloud_msg, laser_frame_id, min_height, max_heig
     laserscan_msg.angle_increment = angle_increment
     laserscan_msg.range_min = range_min
     laserscan_msg.range_max = range_max
+
 
     # Process the point cloud data
     pc_data = pc2.read_points(pointcloud_msg, field_names=("x", "y", "z"), skip_nans=True)
@@ -51,8 +55,8 @@ if __name__ == '__main__':
     input_topic = '/velodyne_points'
     output_topic = '/scan'  # New LaserScan topic
     laser_frame_id = 'base_link'  # Replace with your desired frame ID
-    min_height = 0.1  # Set your desired min height
-    max_height = 1.0  # Set your desired max height
+    min_height = -1.45  # Set your desired min height
+    max_height = -0.5  # Set your desired max height
 
     pub = rospy.Publisher(output_topic, LaserScan, queue_size=10)
     sub = rospy.Subscriber(input_topic, PointCloud2, pointcloud_callback)

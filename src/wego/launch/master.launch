@@ -1,6 +1,7 @@
 <?xml version="1.0"?>
 
 <launch>
+    <node pkg="wego" type="pointcloud2_to_laserscan.py" name="point_to_laser" output="screen" />
     <!-- <arg name="camera" default="camera" /> -->
 
     <!-- start sensor-->
@@ -38,7 +39,7 @@
     </node> -->
     
     <node pkg="tf2_ros" type="static_transform_publisher" name="map_to_odom" args="1.5 0.2 1.25 0 0 0 1 map odom" />
-    <!-- <node pkg="tf2_ros" type="static_transform_publisher" name="odom_to_base_link" args="1.5 0 1.25 0 0 0 1 odom base_link" /> -->
+    <node pkg="tf2_ros" type="static_transform_publisher" name="odom_to_base_link" args="1.5 0 1.25 0 0 0 1 odom base_link" />
     <!-- <node pkg="tf2_ros" type="static_transform_publisher" name="base_link_to_scan" args="1.5 0 1.25 0 0 0 1 base_link scan" /> -->
     <!-- <node pkg="tf2_ros" type="static_transform_publisher" name="base_link_to_lidar" args="1.5 0 1.25 0 0 0 1 base_link lidar3D" /> -->
     <node pkg="tf2_ros" type="static_transform_publisher" name="base_link_to_imu" args="0 0 0 0 0 0 1 base_link imu" />

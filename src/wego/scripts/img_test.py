@@ -23,8 +23,8 @@ class Binary_Line:
         # Define range of yellow color in HSV
         # yellow_lower = np.array([20, 100, 100])
         # yellow_upper = np.array([30, 255, 255])
-        yellow_lower = np.array([18, 100, 100])
-        yellow_upper = np.array([32, 255, 255])
+        yellow_lower = np.array([22, 255, 255])
+        yellow_upper = np.array([42, 255, 255])
 
         # Threshold the HSV image to get only yellow colors
         yellow_mask = cv2.inRange(hsv, yellow_lower, yellow_upper)
@@ -87,7 +87,7 @@ class Binary_Line:
         cv2.namedWindow("img", cv2.WINDOW_NORMAL)
         cv2.namedWindow("binary_img", cv2.WINDOW_NORMAL)
 
-        cv2.imshow("img", img)
+        cv2.imshow("img", warp_img)
         cv2.imshow("binary_img", binary_img)
 
         cv2.waitKey(1)
