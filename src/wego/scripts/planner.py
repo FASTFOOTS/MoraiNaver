@@ -145,13 +145,12 @@ class gen_planner():
                     for i in range(1,22):
                         globals()['lattice_path_{}_pub'.format(i)].publish(lattice_path[i-1])
                 ########################  lattice  ########################
-
+# (630< self.current_waypoint < 700) or \
 
                 pure_pursuit.getPath(local_path) ## pure_pursuit 알고리즘에 Local path 적용
                 pure_pursuit.getEgoStatus(self.status_msg) ## pure_pursuit 알고리즘에 차량의 status 적용
                 if (0< self.current_waypoint < 130) or \
                     (408< self.current_waypoint < 450) or \
-                    (630< self.current_waypoint < 700) or \
                     (1375< self.current_waypoint < 1446) or \
                     (1640< self.current_waypoint < 1730) or \
                     (1862< self.current_waypoint < 1920) or \
@@ -159,12 +158,13 @@ class gen_planner():
                     (3000< self.current_waypoint < 3076) or \
                     (3877< self.current_waypoint < 3911) or \
                     (4610< self.current_waypoint < 4643):
-                    ctrl_msg.steering=-pure_pursuit.steering_angle()
-                    print("lattice planner")
+                    ctrl_msg.steering=self.steering
+                    # ctrl_msg.steering=-pure_pursuit.steering_angle()
+                    # print("lattice planner")
                 else:
                     # print("follow the gap")
                     ctrl_msg.steering=self.steering
-                target_velocity = vel_profile_50[self.current_waypoint]
+                target_velocity = vel_profile_70[self.current_waypoint]
                 # if abs(self.wheel_angle) > 4.5:
                 #     if abs(self.wheel_angle) > 8.0:
                 #         target_velocity = vel_profile_50[self.current_waypoint]
@@ -256,6 +256,7 @@ class gen_planner():
         index_list = []
         index_list2 = []
         mid_point = []
+        length_list = []
         
         scan_ranges = [round(data,5) for data in data.ranges]
         del scan_ranges[:224]
@@ -264,12 +265,27 @@ class gen_planner():
         print("===========================")
         print(scan_ranges)
         sublists = self.find_sublists_with_threshold(scan_ranges, limit_distance, step)
+        if sublists:
+            # print("step 50")
+            pass
+        else: # under 15 bundle more than 50 
+            sublists = self.find_sublists_with_threshold(scan_ranges, limit_distance, 1) # step = 1
+            if sublists:
+                # print("step 1")
+                pass
+            else: # doesn't have more than 50
+                # print("no step")
+                one_point_index = scan_ranges.index(max(scan_ranges))
+                sublists = [(one_point_index, one_point_index+1)] # max value of scan_ranges
+        # print(sublists)
         for i, (start, end) in enumerate(sublists):
-            print(f"부분 {i + 1}: 시작 인덱스 {start}, 끝 인덱스 {end}")
+            # print(f"부분 {i + 1}: 시작 인덱스 {start}, 끝 인덱스 {end}")
             length = (end - start)/2
             mid_point.append(int(start + length))
+            length_list.append(length)
 
-        selected_index = round(len(mid_point)/2) - 1
+        # selected_index = round(len(mid_point)/2) - 1
+        selected_index = length_list.index(max(length_list))
         self.steering_angle[1] = -(224 - mid_point[selected_index]) * 90 / 224 * 0.0075
 
         # if self.steering_angle[1] - self.steering_angle[0] > 1:
