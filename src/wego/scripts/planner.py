@@ -90,9 +90,9 @@ class gen_planner():
 
         self.global_path = path_reader.read_txt(self.path_name)
 
-        # normal_velocity_30 = 30/3.6 # km/h -> m/s
-        # vel_planner_30=velocityPlanning(normal_velocity_30,0.15) ## 속도 계획
-        # vel_profile_30=vel_planner_30.curveBasedVelocity(self.global_path,100)
+        normal_velocity_30 = 30/3.6 # km/h -> m/s
+        vel_planner_30=velocityPlanning(normal_velocity_30,0.15) ## 속도 계획
+        vel_profile_30=vel_planner_30.curveBasedVelocity(self.global_path,100)
 
         # normal_velocity_10 = 10/3.6 # km/h -> m/s
         # vel_planner_10=velocityPlanning(normal_velocity_10,0.15) ## 속도 계획
@@ -152,19 +152,26 @@ class gen_planner():
 
 # (630< self.current_waypoint < 700) or \
 # (0< self.current_waypoint < 130) or \                
-                if (408< self.current_waypoint < 450) or \
-                    (1375< self.current_waypoint < 1446) or \
-                    (1640< self.current_waypoint < 1730) or \
-                    (1862< self.current_waypoint < 1920) or \
-                    (2120< self.current_waypoint < 2191) or \
-                    (3000< self.current_waypoint < 3076) or \
-                    (3877< self.current_waypoint < 3911) or \
-                    (4610< self.current_waypoint < 4643):
+                if (0< self.current_waypoint < 200) or \
+                    (500< self.current_waypoint < 608) or \
+                    (950< self.current_waypoint < 970) or \
+                    (1670< self.current_waypoint < 1750) or \
+                    (1980< self.current_waypoint < 2060) or \
+                    (2212< self.current_waypoint < 2290) or \
+                    (2500< self.current_waypoint < 2557) or \
+                    (3918< self.current_waypoint < 4000) or \
+                    (5285< self.current_waypoint < 5342) or \
+                    (5459< self.current_waypoint < 5555) or \
+                    (5928< self.current_waypoint < 5769) or \
+                    (6040< self.current_waypoint < 6100) or \
+                    (6245< self.current_waypoint < 6308) or \
+                    (7200< self.current_waypoint < 7560) or \
+                    (4730< self.current_waypoint < 4768):
                     # ctrl_msg.steering=self.steering
                     ctrl_msg.steering=-pure_pursuit.steering_angle()
-                    # print("lattice planner")
+                    print("lattice planner")
                 else:
-                    # print("follow the gap")
+                    print("follow the gap")
                     ctrl_msg.steering=self.steering
                 target_velocity = vel_profile_70[self.current_waypoint]
 
@@ -198,7 +205,7 @@ class gen_planner():
                 local_path_pub.publish(local_path) ## Local Path 출력
                 ctrl_pub.publish(ctrl_msg) ## Vehicl Control 출력
                 odom_pub.publish(self.makeOdomMsg())
-                # self.print_info()
+                self.print_info()
             
                 if count==30 : ## global path 출력
                     global_path_pub.publish(self.global_path)
@@ -348,27 +355,54 @@ class gen_planner():
     
     def detect_obj_and_steering(self, bin_img):
         img_sublishts = []
-        bottom_half_y = bin_img.shape[0] * 2 / 3
+        bottom_half_y = bin_img.shape[0] * 1 / 3
         histogram = np.sum(bin_img[int(bottom_half_y) :, :], axis=0)
         histogram[histogram < 5] = 0
 
-        img_sublishts = self.find_sublists_with_threshold(histogram, 24, 2, 0)
+        # img_sublishts = self.find_sublists_with_threshold(histogram, 24, 5, 0)
         
         # obj_base = np.argmax(histogram)
         # print(f"obj_base : {obj_base}")
 
-        return img_sublishts
+        return histogram 
 
     def img_CB(self, data):
-        print("=========================")
+        mid_point = []
+        length_list = []
+
+        # print("=========================")
         img = self.bridge.compressed_imgmsg_to_cv2(data)
         warp_img = self.img_warp(img)
         yellow_obj = self.detect_color(warp_img)
         bin_img = self.img_binary(yellow_obj)
         
         # print(bin_img)
-        detected_obj = self.detect_obj_and_steering(bin_img)
-        print(f"detected_obj : {detected_obj}")
+        histogram = self.detect_obj_and_steering(bin_img)
+        sublists = self.find_sublists_with_threshold(histogram, 24, 5, 0)
+        if sublists:
+            # print("step 50")
+            pass
+        else: # under 15 bundle more than 50 
+            sublists = self.find_sublists_with_threshold(histogram, 24, 1, 0) # step = 1
+            if sublists:
+                # print("step 1")
+                pass
+            else: # doesn't have more than 50
+                # print("no step")
+                one_point_index = histogram.index(max(histogram))
+                sublists = [(one_point_index, one_point_index+1)] # max value of scan_ranges
+        # print(sublists)
+        for i, (start, end) in enumerate(sublists):
+            # print(f"부분 {i + 1}: 시작 인덱스 {start}, 끝 인덱스 {end}")
+            length = (end - start)/2
+            mid_point.append(int(start + length))
+            length_list.append(length)
+
+        # selected_index = round(len(mid_point)/2) - 1
+        selected_index = length_list.index(max(length_list))
+        self.steering_angle[1] = -(224 - mid_point[selected_index]) * 90 / 224 * 0.001
+
+
         # obj_y_value = (320 - detected_obj) / 20
         
         # if 200 < detected_obj < 500:
