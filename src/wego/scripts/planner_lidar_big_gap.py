@@ -286,7 +286,10 @@ class gen_planner():
 
         # selected_index = round(len(mid_point)/2) - 1
         selected_index = length_list.index(max(length_list))
-        self.steering_angle[1] = -(224 - mid_point[selected_index]) * 90 / 224 * 0.0075
+        if len(mid_point) > 1:
+            self.steering_angle[1] = -(224 - mid_point[selected_index]) * 90 / 224 * 0.0075
+        else:
+            self.steering_angle[1] = 0
 
         # if self.steering_angle[1] - self.steering_angle[0] > 1:
         #     self.steering_angle[1] += 1
